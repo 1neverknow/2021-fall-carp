@@ -3,7 +3,7 @@ import random
 import time
 
 from CARP_info import *
-from v1_ga.CARP_ai import MAENS
+from v1_maen.CARP_ai import MAENS
 
 
 # from CARP_algorithm import CARPAlgorithm as MAEN

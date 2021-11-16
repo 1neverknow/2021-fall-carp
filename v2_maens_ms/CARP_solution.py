@@ -1,3 +1,5 @@
+import random
+
 import numpy as np
 
 
@@ -59,6 +61,28 @@ class Solution:
         new_solution.total_cost = sum(costs)
         new_solution.validate()
         return new_solution
+
+    def remove_node(self, x):
+        for route in self.routes:
+            if x in route.route:
+                route.remove(x)
+        # self.is_valid = False
+
+    def insert_route(self, route_id, route_index, route):
+        self.routes[route_id].insert_route(route_index, route)
+        # self.is_valid = False
+
+    def random_subroute(self):
+        r_i = random.randrange(0, len(self.routes))
+        while len(self.routes[r_i].route) == 2:
+            r_i = random.randrange(0, len(self.routes))
+        c_s = random.randrange(1, len(self.routes[r_i].route))
+        c_e = c_s
+        while c_e == c_s:
+            c_e = random.randrange(1, len(self.routes[r_i].route))
+        if c_s > c_e:
+            c_s, c_e = c_e, c_s
+        return self.routes[r_i].route[c_s:c_e]
 
     def __hash__(self):
         return hash(str(self.routes))

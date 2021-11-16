@@ -5,7 +5,7 @@ get_int = lambda s: int(get_str(s))
 
 
 class Edge:
-    def __init__(self, u, v, cost, demand):
+    def __init__(self, u, v, cost, demand=0):
         self.u = u
         self.v = v
         self.cost = cost

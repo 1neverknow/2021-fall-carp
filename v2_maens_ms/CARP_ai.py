@@ -26,6 +26,7 @@ class MAENS:
         self.mutation_rate = mutation_rate
         self.psize = psize
         self.ubtrial = ubtrial
+        self.opsize = 6 * psize
 
         """ 
             Four commonly used move operators for CARP:
@@ -390,19 +391,18 @@ class MAENS:
         while True:
             new_solution = min([operation(solution) for operation in self.operations], key=self.get_quality)
             discard_chance = 0 if new_solution.is_valid else 0.6
+            # discard_chance = new_solution.discard_chance
             if random.random() > discard_chance:
                 return new_solution
+
 
     def run(self):
         # Memetic algorithm with extended neighborhood search
         for solution in self.population.copy():
-            if random.random() > solution.discard_chance:
-                if random.random() > self.mutation_rate:
-                    new_solution = min([operation(solution) for operation in self.operations], key=self.get_quality)
-                    if random.random() > new_solution.discard_chance:
-                        self.population.add(new_solution)
+            if random.random() < solution.discard_chance:
+                self.local_search(solution)
             else:
-                self.population.remove(solution)
+                self.population.add(solution)
 
         while len(self.population) > self.psize:
             worst = max(self.population, key=self.get_quality)
