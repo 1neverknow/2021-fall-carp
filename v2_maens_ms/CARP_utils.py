@@ -43,7 +43,7 @@ class Ulusoy:
         graph = np.full((size, size), np.inf)
         np.fill_diagonal(graph, 0)
 
-        for i in range(1, size-1):
+        for i in range(1, size - 1):
             graph[0, i] = info.min_dist[info.depot, tasks[i].u] \
                           + tasks[i].cost \
                           + info.min_dist[tasks[i].v, info.depot]
@@ -67,27 +67,25 @@ class Ulusoy:
                 j += 1
         return graph
 
-
-    def shortest_path(self, graph, tasks):
-        """ Dijkstra
-            find the shortest path from task[0] to task[-1]
-            找出起点到终点的最短路径，并且返回新的节点序
-        """
-        import heapq
-        size = len(tasks)
-        min_dist = np.copy(graph[0, :])
-        pq = []
-        for i in range(1, size):
-            pq.append()
-        for i in range(1, size):
-            heapq.heappush(pq)
-
+    # def shortest_path(self, graph, tasks):
+    #     """ Dijkstra
+    #         find the shortest path from task[0] to task[-1]
+    #         找出起点到终点的最短路径，并且返回新的节点序
+    #     """
+    #     import heapq
+    #     size = len(tasks)
+    #     min_dist = np.copy(graph[0, :])
+    #     pq = []
+    #     for i in range(1, size):
+    #         pq.append()
+    #     for i in range(1, size):
+    #         heapq.heappush(pq)
 
     def to_graph(self, tasks):
         info = self.info
         size = len(tasks)
-        node_cnt = size * 2
-        graph = np.full((node_cnt + 1, node_cnt + 1), -1)
+        node_cnt = size * 2 + 1
+        incoming, outgoing = [[]] * node_cnt, [[]] * node_cnt
         for i, task in enumerate(tasks):
             x = i * 2 + 1
             """ C1: 
@@ -96,8 +94,9 @@ class Ulusoy:
                 then Ck,k+1 = 0.
             """
             # route(x-1, x) is no-service node
-            graph[x, x - 1] = 0
-            graph[x - 1, x] = 0
+            node = Node(x - 1, x, 0)
+            incoming[x].append(node)
+            outgoing[x - 1].append(node)
 
             """ C2 
                 Ck,h is the sum of the node costs Ci,j,included in
@@ -106,8 +105,9 @@ class Ulusoy:
             """
             # route(x, x+1) = {depot, x, x+1, depot}
             cost = task.cost + info.dist[info.depot, task.u] + info.dist[task.v, info.depot]
-            graph[x, x + 1] = cost
-            graph[x + 1, x] = cost
+            node = Node(x, x + 1, cost)
+            incoming[x + 1].append(node)
+            outgoing[x].append(node)
 
             load = task.load
             cost = info.dist[info.depot, task.u] + task.cost
@@ -117,20 +117,18 @@ class Ulusoy:
                 load += tasks[j].loads
                 cost += info.dist[tasks[j - 1].v, tasks[j].u] + tasks[j].cost
                 curr_cost = cost + info.dist[task[j].v, info.depot]
-                graph[x, 2 * j + 2] = curr_cost
-                graph[2 * j + 2, x] = curr_cost
+                node = Node(x, 2 * j + 2, curr_cost)
+                incoming[2 * j + 2].append(node)
+                outgoing[x].append(node)
                 j += 1
-        return graph
+        return incoming, outgoing
 
-
-    def ulusoy_split(self, tasks):
-        self.flatten(tasks)
-
-    def get_path(self, graph):
-        node_cost = np.zeros(len(graph) + 1)
-        best_path = [[]] * (len(graph) + 1)
+    def get_path(self, incoming, outgoing):
+        size = len(incoming)
+        node_cost = np.zeros(size + 1)
+        best_path = [[]] * (size + 1)
         node_cost[1] = np.inf
-        for i in range(2, len(graph), 2):
+        for i in range(2, size):
             min_cost = np.inf
             best_node = []
             # find incoming node with min cost
@@ -138,6 +136,7 @@ class Ulusoy:
                 if node.cost < min_cost:
                     min_cost = node.cost
                     best_node = node
+
             if i % 2 == 0:
                 pre_best_path = list(best_path[best_node.u])
                 pre_best_path.append(best_node)
@@ -145,19 +144,23 @@ class Ulusoy:
             else:
                 best_path[i] = best_path[i - 1]
             node_cost[i] += min_cost
+
             # release node, update outgoing node
             for node in outgoing[i]:
-                idx = incoming[node.v].index(node)
+                # idx = incoming[node.v].index(node)
                 node.cost += node_cost[i]
-                incoming[node.v, idx] = node
+                # incoming[node.v, idx] = node
         return best_path[-1], node_cost[-1]
 
-    def ulusoy_splitting(self, tasks):
-        graph, incoming, outgoing = self.partition(tasks)
-        return self.get_path(graph, incoming, outgoing)
+    def split(self, solution):
+        tasks = solution.routes
+        incoming, outgoing = self.partition(tasks)
+        solution.routes, solution.cost = self.get_path(incoming, outgoing)
 
 
 class SBX:
+    """Sequence based crossover
+    """
     def __init__(self, info):
         self.info = info
 
@@ -192,4 +195,5 @@ class SBX:
             child.remove(x)
         r_id, n_id = self.best_insert(child, sub_route)
         child.insert_route(r_id, sub_route)
+        child.validate()
         return child
