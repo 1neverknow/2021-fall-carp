@@ -3,17 +3,15 @@ import random
 import time
 
 from CARP_info import *
-from v1_maen.CARP_ai import MAENS
+from CARP_ai import MAENS
 
 
 # from CARP_algorithm import CARPAlgorithm as MAEN
 
 class CarpEngine:
-    def __init__(self, filename, termination, seed, population_size=100, test=False):
+    def __init__(self, filename, termination, seed, test=False):
         self.info = Info(filename)
         self.termination = termination
-        self.seed = seed
-        self.population_size = population_size
         self.test = test
 
         random.seed(seed)
@@ -23,14 +21,14 @@ class CarpEngine:
         def format_solution(s):
             s_print = []
             for p in s:
-                # s_print.append(0)
+                s_print.append(0)
                 s_print.extend(p)
-                # s_print.append(0)
+                s_print.append(0)
             return s_print
 
         routes = solution.routes
         print("s", (",".join(str(d) for d in format_solution(routes))).replace(" ", ""))
-        print("q", solution.total_cost)
+        print("q", int(solution.total_cost))
 
     def solve(self):
         avg_time = 0
@@ -38,7 +36,7 @@ class CarpEngine:
         remain_time = self.termination - 2
         start_time = time.perf_counter()
 
-        solver = MAENS(self.info, self.population_size)
+        solver = MAENS(self.info)
         remain_time -= (time.perf_counter() - start_time)
 
         iter_count = 0
@@ -72,11 +70,11 @@ if __name__ == '__main__':
     import sys
 
     if len(sys.argv) == 1:
-        sys.argv = ['CARP_solver.py', '../CARP_samples/gdb1.dat', '-t', '10', '-s', '1']
+        sys.argv = ['CARP_solver.py', '../CARP_samples/egl-e1-A.dat', '-t', '10', '-s', '1']
 
     filename, termination, seed = [sys.argv[i] for i in range(len(sys.argv)) if i % 2 == 1]
     termination = int(termination)
-    seed = int(seed)
+    seed = int(seed) % 4294967296
 
-    engine = CarpEngine(filename, termination, seed, test=True)
+    engine = CarpEngine(filename, termination, seed)
     engine.solve()

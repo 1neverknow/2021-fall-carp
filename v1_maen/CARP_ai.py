@@ -20,10 +20,11 @@ class MAENS:
     the best one is chosen as the output of the MS operator
     """
 
-    def __init__(self, info, population_size=100, mutation_rate=0.2):
+    def __init__(self, info):
         self.info = info
-        self.mutation_rate = mutation_rate
-        self.population_size = population_size
+        self.mutation_rate = 0.2
+        self.population_size = 50
+        self.ubtrial = 80
 
         """ 
             Four commonly used move operators for CARP:
@@ -73,8 +74,8 @@ class MAENS:
         (Ulusoy's splitting: 
             seeks the optimal way to split the ordered list into different routes)
         """
-
-        self.population = self.init()
+        self.population = []
+        self.init()
 
     def init(self):
         population = set()
@@ -90,13 +91,16 @@ class MAENS:
         parents = copy.copy(population)
 
         # extend to population size
-        while len(population) < self.population_size:
+        counter = 0
+        while len(population) < self.population_size and counter < self.ubtrial:
             for p in parents:
+                counter += 1
                 operation = random.choice(self.operations)
                 new_solution = operation(p)
                 if random.random() > new_solution.discard_chance:
                     population.add(new_solution)
-        return population
+        self.population_size = len(population)
+        self.population = population
 
     def is_better(self, edge, selected_task, current_load, rule):
         return rule(edge, selected_task, current_load)

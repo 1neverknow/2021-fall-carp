@@ -28,7 +28,7 @@ class CarpEngine:
 
         routes = solution.routes
         print("s", (",".join(str(d) for d in format_solution(routes))).replace(" ", ""))
-        print("q", solution.total_cost)
+        print("q", int(solution.total_cost))
 
     def solve(self):
         avg_time = 0
