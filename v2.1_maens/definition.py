@@ -16,7 +16,7 @@ class Solution:
         return hash((self.quality, self.exceed_load))
 
     def __eq__(self, other):
-        return self.quality == other.quailty and self.exceed_load == other.exceed_load
+        return self.quality == other.quality and self.exceed_load == other.exceed_load
 
 
 class Insert:
@@ -27,10 +27,11 @@ class Insert:
         self.cost = cost
         self.exceed_load = exceed_load
 
+
 class Move:
     def __init__(self, type, task1=None, task2=None,
-                 orig_seg=None, targ_seg=None, orig_pos=-1, targ_pos=-1,
-                 quality=-1, exceed_load=-1, fitness=np.inf):
+                 orig_seg=None, targ_seg=None, orig_pos=0, targ_pos=0,
+                 quality=0, exceed_load=0):
         # type = 1, 2, 3 -> single insert, double insert, swap
         self.type = type
         self.task1 = task1
@@ -41,4 +42,10 @@ class Move:
         self.targ_pos = targ_pos
         self.quality = quality
         self.exceed_load = exceed_load
-        self.fitness = fitness
+        self.fitness = np.inf
+
+    def calculate_fitness(self, coef):
+        self.fitness = self.quality + coef * self.exceed_load
+
+
+
