@@ -21,6 +21,13 @@ def find_element_position(position, arr, e):
     position[idx] = pos
     position[0] = len(pos)
     return position
+    # position[0] = 0
+    # for i in range(1, arr[0] + 1):
+    #     if arr[i] == e:
+    #         position[0] += 1
+    #         position[position[0]] = i
+
+
 
 
 def del_element(arr, k):
@@ -230,7 +237,7 @@ class MAENS:
 
         # position = np.empty(MAX_TASK_SEG_LENGTH)
         # depot_dist = np.empty(MAX_TASK_TAG_LENGTH)
-        # depot_dist = info.min_dist[info.depot, :].copy()
+        # depot_dist = min_dist[info.depot, :].copy()
         # yeild = np.empty(MAX_TASK_TAG_LENGTH, dtype=np.float32)
         # yeild = np.array([inst_tasks[i].demand / inst_tasks[i].cost for i in np.where(serve_mark[:task_num+1])[0]])
 
@@ -268,7 +275,7 @@ class MAENS:
         #     mindist = np.inf
         #     nearest_task[0] = 0
         #     for i in range(1, candidate_task[0] + 1):
-        #         curr_cost = info.min_dist[inst_tasks[curr_task].v, inst_tasks[candidate_task[i]].u]
+        #         curr_cost = min_dist[inst_tasks[curr_task].v, inst_tasks[candidate_task[i]].u]
         #         if curr_cost < mindist:
         #             mindist = curr_cost
         #             nearest_task[0] = 1
@@ -458,6 +465,7 @@ class MAENS:
         """
         info = self.info
         inst_tasks = info.tasks
+        min_dist = info.min_dist
 
         # max_task_seq_length = info.edges_total
         sub_path1 = np.empty(MAX_TASK_SEQ_LENGTH, dtype=int)
@@ -578,9 +586,9 @@ class MAENS:
 
                 for k in range(2, routes1[j, 0] + 1):
                     candidate_insert_cnt += 1
-                    insert_cost = info.min_dist[inst_tasks[routes1[j, k - 1]].v, inst_tasks[curr_task].u] \
-                                  + info.min_dist[inst_tasks[curr_task].v, inst_tasks[routes1[j, k]].u] \
-                                  - info.min_dist[inst_tasks[routes1[j, k - 1]].v, inst_tasks[routes1[j, k]].u]
+                    insert_cost = min_dist[inst_tasks[routes1[j, k - 1]].v, inst_tasks[curr_task].u] \
+                                  + min_dist[inst_tasks[curr_task].v, inst_tasks[routes1[j, k]].u] \
+                                  - min_dist[inst_tasks[routes1[j, k - 1]].v, inst_tasks[routes1[j, k]].u]
                     candidate_insertions[candidate_insert_cnt] = Insert(task=curr_task, routeID=j, position=k,
                                                                         cost=insert_cost, exceed_load=ivload)
 
@@ -588,8 +596,7 @@ class MAENS:
                     add = 1
                     for m in range(1, pare_to_set_size + 1):
                         if candidate_insertions[candidate_insert_cnt].cost > pare_to_set_insertions[m].cost and \
-                                candidate_insertions[candidate_insert_cnt].exceed_load > pare_to_set_insertions[
-                            m].exceed_load:
+                                candidate_insertions[candidate_insert_cnt].exceed_load > pare_to_set_insertions[m].exceed_load:
                             add = 0
                             break
                         elif candidate_insertions[candidate_insert_cnt].cost < pare_to_set_insertions[m].cost and \
@@ -607,9 +614,9 @@ class MAENS:
                     w = inst_tasks[curr_task].inverse
                     candidate_insert_cnt += 1
 
-                    insert_cost = info.min_dist[inst_tasks[routes1[j, k - 1]].v, inst_tasks[curr_task].u] \
-                                  + info.min_dist[inst_tasks[w].v, inst_tasks[routes1[j, k]].u] \
-                                  - info.min_dist[inst_tasks[routes1[j, k - 1]].v, inst_tasks[routes1[j, k]].u]
+                    insert_cost = min_dist[inst_tasks[routes1[j, k - 1]].v, inst_tasks[curr_task].u] \
+                                  + min_dist[inst_tasks[w].v, inst_tasks[routes1[j, k]].u] \
+                                  - min_dist[inst_tasks[routes1[j, k - 1]].v, inst_tasks[routes1[j, k]].u]
                     candidate_insertions[candidate_insert_cnt] = Insert(task=w, routeID=j, position=k, cost=insert_cost,
                                                                         exceed_load=ivload)
 
@@ -636,8 +643,8 @@ class MAENS:
 
             # insert as a new route
             candidate_insert_cnt += 1
-            insert_cost = info.min_dist[info.depot, inst_tasks[curr_task].u] \
-                          + info.min_dist[inst_tasks[curr_task].v, info.depot]
+            insert_cost = min_dist[info.depot, inst_tasks[curr_task].u] \
+                          + min_dist[inst_tasks[curr_task].v, info.depot]
             candidate_insertions[candidate_insert_cnt] = Insert(task=curr_task, routeID=0, position=2, cost=insert_cost,
                                                                 exceed_load=0)
 
@@ -694,12 +701,12 @@ class MAENS:
         exceed_load = self.get_exceed_loads(loads)
         return Solution(sequence, loads, quality, exceed_load)
 
-    def lns_mut(self, s: Solution, best_fsb_solution: Solution):
+    def lns_mut(self, sx: Solution, best_fsb_solution: Solution):
         info = self.info
 
-        sls = copy.deepcopy(s)
+        sls = copy.deepcopy(sx)
         coef = best_fsb_solution.quality / info.capacity * (
-                best_fsb_solution.quality / s.quality + s.exceed_load / info.capacity + 1.0)
+                best_fsb_solution.quality / sx.quality + sx.exceed_load / info.capacity + 1.0)
         sls.calculate_fitness(coef)
 
         count, count1 = 0, 0
@@ -807,7 +814,7 @@ class MAENS:
                 break
             if sls.exceed_load == 0 and sls.quality < best_fsb_solution.quality:
                 best_fsb_solution = copy.deepcopy(sls)
-        return best_fsb_solution
+        return sls, best_fsb_solution
 
     def get_fitness(self, move: Move):
         return move.fitness
@@ -821,6 +828,14 @@ class MAENS:
             # traditional move
             next_move: Move = min([move(ind, coef) for move in self.operations], key=self.get_fitness)
 
+            # 将task_route转化为ind.task_seq
+            # end_points = np.where(ind.task_seq[1:ind.task_seq[0] + 1] == 0)[0] + 1
+            # orig_ptr = end_points[next_move.orig_seg - 1] + next_move.orig_pos
+            # if next_move.targ_seg < len(end_points):
+            #     targ_ptr = end_points[next_move.targ_seg - 1] + next_move.targ_seg
+            # else:
+            #     # ind.task_seq[ind.task_seq[0] + 1] = 0
+            #     targ_ptr = ind.task_seq[0] + 1
             orig_ptr, targ_ptr = 0, 0
             seg_ptr1, seg_ptr2 = 0, 0
             for i in range(1, ind.task_seq[0]):
@@ -829,7 +844,7 @@ class MAENS:
                         seg_ptr1 += 1
                     if seg_ptr2 < next_move.targ_seg:
                         seg_ptr2 += 1
-                    if seg_ptr1 == next_move.targ_seg and orig_ptr == 0:
+                    if seg_ptr1 == next_move.orig_seg and orig_ptr == 0:
                         orig_ptr = i + next_move.orig_pos - 1
                     if seg_ptr2 == next_move.targ_seg and targ_ptr == 0:
                         targ_ptr = i + next_move.targ_pos - 1
@@ -892,7 +907,6 @@ class MAENS:
             task_routes[0, 0] = 1
             task_routes[1, 0] = 1
             task_routes[1, 1] = 0
-
             for i in range(2, ind.task_seq[0] + 1):
                 task_routes[task_routes[0, 0], 0] += 1
                 task_routes[task_routes[0, 0], task_routes[task_routes[0, 0], 0]] = ind.task_seq[i]
@@ -969,11 +983,21 @@ class MAENS:
         """
         info = self.info
         inst_tasks = info.tasks
+        min_dist = info.min_dist
 
+        """将individual 的task_seq转化为task_route格式
+        task_routes[0, 0]: #routes
+        task_routes[i, 0]: routes[i]的 #tasks
+        task_toutes[i, j]: routes[i], task[j]在inst_task中对应的编号
+        
+        task_routes[i, 0] == 1: 
+        
+        ind.task_seq[i] == 0: 一条route的终点（下一条route起点）
+                        != 0: route上的task在inst_task中的编号
+        """
         task_routes[0, 0] = 1
         task_routes[1, 0] = 1
         task_routes[1, 1] = 0
-        # counter = 0
         for i in range(2, ind.task_seq[0] + 1):
             task_routes[task_routes[0, 0], 0] += 1
             task_routes[task_routes[0, 0], task_routes[task_routes[0, 0], 0]] = ind.task_seq[i]
@@ -984,13 +1008,17 @@ class MAENS:
 
         best_move = Move(type=1)
         tmp_move = Move(type=1)
+        # task_routes[0, 0]: segment总数
         for s1 in range(1, task_routes[0, 0] + 1):
+            # orig_seg: 被remove的task所在的segment
             orig_seg = s1
+            # task_routes[seg, 0]: segment中的路径条数
             for i in range(2, task_routes[s1, 0]):
                 orig_pos = i
                 for s2 in range(1, task_routes[0, 0] + 2):
                     if s2 == s1:
                         continue
+                    # s2: 插入的segment
                     targ_seg = s2
                     if s2 > task_routes[0, 0]:
                         exceed_load = ind.exceed_load
@@ -1000,13 +1028,13 @@ class MAENS:
                             exceed_load += ind.loads[i] - inst_tasks[task_routes[s1, i]].demand - info.capacity
 
                         task1 = task_routes[s1, i]
-                        quality = ind.quality + info.min_dist[
+                        quality = ind.quality + min_dist[
                             inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  + info.min_dist[info.depot, inst_tasks[task1].u] \
-                                  + info.min_dist[inst_tasks[task1].v, info.depot] \
-                                  - info.min_dist[
+                                  + min_dist[info.depot, inst_tasks[task1].u] \
+                                  + min_dist[inst_tasks[task1].v, info.depot] \
+                                  - min_dist[
                                       inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
-                                  - info.min_dist[
+                                  - min_dist[
                                       inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u]
                         tmp_move.quality = quality
                         tmp_move.exceed_load = exceed_load
@@ -1025,29 +1053,23 @@ class MAENS:
                     for j in range(2, task_routes[s2, 0] + 1):
                         if inst_tasks[task_routes[s2, j - 1]].v == inst_tasks[task_routes[s2, j]].u:
                             continue
+                        # targ_pos：插入的位置
                         targ_pos = j
                         exceed_load = ind.exceed_load
-                        if ind.loads[s1] > info.capacity:
-                            exceed_load -= ind.loads[s1] - info.capacity
-                        if ind.loads[s2] > info.capacity:
-                            exceed_load -= ind.loads[s2] - info.capacity
-                        if ind.loads[s1] - inst_tasks[task_routes[s1, i]].demand > info.capacity:
-                            exceed_load += ind.loads[s1] - inst_tasks[task_routes[s1, i]].demand - info.capacity
-                        if ind.loads[s2] + inst_tasks[task_routes[s1, i]].demand > info.capacity:
-                            exceed_load += ind.loads[s2] + inst_tasks[task_routes[s1, i]].demand - info.capacity
+                        # 计算新route的load
+                        exceed_load -= max(ind.loads[s1] - info.capacity, 0)
+                        exceed_load -= max(ind.loads[s2] - info.capacity, 0)
+                        exceed_load += max(ind.loads[s1] - inst_tasks[task_routes[s1, i]].demand - info.capacity, 0)
+                        exceed_load += max(ind.loads[s2] + inst_tasks[task_routes[s1, i]].demand - info.capacity, 0)
 
                         task1 = task_routes[s1, i]
                         quality = ind.quality \
-                                  + info.min_dist[
-                                      inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  + info.min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
-                                  + info.min_dist[inst_tasks[task1].v, inst_tasks[task_routes[s2, j]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u]
+                                  + min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i + 1]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
+                                  + min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
+                                  + min_dist[inst_tasks[task1].v, inst_tasks[task_routes[s2, j]].u] \
+                                  - min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u]
                         tmp_move.quality = quality
                         tmp_move.exceed_load = exceed_load
                         tmp_move.calculate_fitness(coef)
@@ -1064,16 +1086,12 @@ class MAENS:
 
                         task1 = inst_tasks[task_routes[s1, i]].inverse
                         quality = ind.quality \
-                                  + info.min_dist[
-                                      inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  + info.min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
-                                  + info.min_dist[inst_tasks[task1].v, inst_tasks[task_routes[s2, j]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u]
+                                  + min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i + 1]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
+                                  + min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
+                                  + min_dist[inst_tasks[task1].v, inst_tasks[task_routes[s2, j]].u] \
+                                  - min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u]
                         tmp_move.quality = quality
                         tmp_move.exceed_load = exceed_load
                         tmp_move.calculate_fitness(coef)
@@ -1090,13 +1108,18 @@ class MAENS:
         return best_move
 
     def double_insertion(self, ind: Solution, coef):
+        """double insertion:
+        similar to single insertion.
+        two consecutive tasks are moved instead of a single task
+        :return: best move
+        """
         info = self.info
         inst_tasks = info.tasks
+        min_dist = info.min_dist
 
         task_routes[0, 0] = 1
         task_routes[1, 0] = 1
         task_routes[1, 1] = 0
-        # counter = 0
         for i in range(2, ind.task_seq[0] + 1):
             task_routes[task_routes[0, 0], 0] += 1
             task_routes[task_routes[0, 0], task_routes[task_routes[0, 0], 0]] = ind.task_seq[i]
@@ -1114,7 +1137,7 @@ class MAENS:
             orig_seg = s1
             for i in range(2, task_routes[s1, 0] - 1):
                 orig_pos = i
-                for s2 in range(1, task_routes[0, 0] + 1):
+                for s2 in range(1, task_routes[0, 0] + 2):
                     if s2 == s1:
                         continue
                     targ_seg = s2
@@ -1122,33 +1145,24 @@ class MAENS:
                         if task_routes[s1, 0] <= 4:
                             continue
                         exceed_load = ind.exceed_load
-                        if ind.loads[s1] > info.capacity:
-                            exceed_load -= ind.loads[s1] - info.capacity
-                        if ind.loads[s1] - inst_tasks[task_routes[s1, i]].demand - inst_tasks[
-                            task_routes[s1, i + 1]].demand > info.capacity:
-                            exceed_load += ind.loads[i] - inst_tasks[task_routes[s1, i]].demand \
+                        exceed_load -= max(ind.loads[s1] - info.capacity, 0)
+                        exceed_load += max(ind.loads[i] - inst_tasks[task_routes[s1, i]].demand \
                                            - inst_tasks[task_routes[s1, i + 1]].demand \
-                                           - info.capacity
-                        if inst_tasks[task_routes[s1, i]].demand + inst_tasks[
-                            task_routes[s1, i + 1]].demand > info.capacity:
-                            exceed_load += inst_tasks[task_routes[s1, i]].demand \
+                                           - info.capacity, 0)
+                        exceed_load += max(inst_tasks[task_routes[s1, i]].demand \
                                            + inst_tasks[task_routes[s1, i + 1]].demand \
-                                           - info.capacity
+                                           - info.capacity, 0)
 
                         task1 = task_routes[s1, i]
                         task2 = task_routes[s1, i + 1]
                         quality = ind.quality \
-                                  + info.min_dist[
-                                      inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i + 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
-                                  + info.min_dist[info.depot, inst_tasks[tmp_move.task1].u] \
-                                  + info.min_dist[inst_tasks[task1].v, inst_tasks[task2].u] \
-                                  + info.min_dist[inst_tasks[task2].v, info.depot]
+                                  + min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i + 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
+                                  + min_dist[info.depot, inst_tasks[task1].u] \
+                                  + min_dist[inst_tasks[task1].v, inst_tasks[task2].u] \
+                                  + min_dist[inst_tasks[task2].v, info.depot]
                         tmp_move.quality = quality
                         tmp_move.exceed_load = exceed_load
                         tmp_move.calculate_fitness(coef)
@@ -1167,17 +1181,13 @@ class MAENS:
                         task2 = inst_tasks[task_routes[s1, i + 1]].inverse
 
                         quality = ind.quality \
-                                  + info.min_dist[
-                                      inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i + 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
-                                  + info.min_dist[info.depot, inst_tasks[tmp_move.task1].u] \
-                                  + info.min_dist[inst_tasks[task1].v, inst_tasks[task2].u] \
-                                  + info.min_dist[inst_tasks[task2].v, info.depot]
+                                  + min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i + 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
+                                  + min_dist[info.depot, inst_tasks[task1].u] \
+                                  + min_dist[inst_tasks[task1].v, inst_tasks[task2].u] \
+                                  + min_dist[inst_tasks[task2].v, info.depot]
                         tmp_move.quality = quality
                         tmp_move.exceed_load = exceed_load
                         tmp_move.calculate_fitness(coef)
@@ -1198,38 +1208,29 @@ class MAENS:
                             continue
                         targ_pos = j
                         exceed_load = ind.exceed_load
-                        if ind.loads[s1] > info.capacity:
-                            exceed_load -= ind.loads[s1] - info.capacity
-                        if ind.loads[s2] > info.capacity:
-                            exceed_load -= ind.loads[s2] - info.capacity
-                        if ind.loads[s1] - inst_tasks[task_routes[s1, i]].demand > info.capacity:
-                            exceed_load += ind.loads[s1] \
+                        exceed_load -= max(ind.loads[s1] - info.capacity, 0)
+                        exceed_load -= max(ind.loads[s2] - info.capacity, 0)
+                        exceed_load += max(ind.loads[s1] \
                                            - inst_tasks[task_routes[s1, i]].demand \
-                                           - inst_tasks[task_routes[s1, i + 1]] \
-                                           - info.capacity
-                        if ind.loads[s2] + inst_tasks[task_routes[s1, i]].demand > info.capacity:
-                            exceed_load += ind.loads[s2] \
+                                           - inst_tasks[task_routes[s1, i + 1]].demand \
+                                           - info.capacity, 0)
+                        exceed_load += max(ind.loads[s2] \
                                            + inst_tasks[task_routes[s1, i]].demand \
                                            + inst_tasks[task_routes[s1, i + 1]].demand \
-                                           - info.capacity
+                                           - info.capacity, 0)
 
                         task1 = task_routes[s1, i]
                         task2 = task_routes[s1, i + 1]
 
                         quality = ind.quality \
-                                  + info.min_dist[
-                                      inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i + 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
-                                  + info.min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
-                                  + info.min_dist[inst_tasks[task1].v, inst_tasks[task2].u] \
-                                  + info.min_dist[inst_tasks[task2].v, inst_tasks[task_routes[s2, j]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u]
+                                  + min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i + 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
+                                  + min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
+                                  + min_dist[inst_tasks[task1].v, inst_tasks[task2].u] \
+                                  + min_dist[inst_tasks[task2].v, inst_tasks[task_routes[s2, j]].u] \
+                                  - min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u]
                         tmp_move.quality = quality
                         tmp_move.exceed_load = exceed_load
                         tmp_move.calculate_fitness(coef)
@@ -1248,19 +1249,14 @@ class MAENS:
                         task1 = inst_tasks[task_routes[s1, i]].inverse
                         task2 = task_routes[s1, i + 1]
                         quality = ind.quality \
-                                  + info.min_dist[
-                                      inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i + 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
-                                  + info.min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
-                                  + info.min_dist[inst_tasks[task1].v, inst_tasks[task2].u] \
-                                  + info.min_dist[inst_tasks[task2].v, inst_tasks[task_routes[s2, j]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u]
+                                  + min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i + 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
+                                  + min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
+                                  + min_dist[inst_tasks[task1].v, inst_tasks[task2].u] \
+                                  + min_dist[inst_tasks[task2].v, inst_tasks[task_routes[s2, j]].u] \
+                                  - min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u]
                         tmp_move.quality = quality
                         tmp_move.exceed_load = exceed_load
                         tmp_move.calculate_fitness(coef)
@@ -1279,19 +1275,14 @@ class MAENS:
                         task1 = task_routes[s1, i]
                         task2 = inst_tasks[task_routes[s1, i + 1]].inverse
                         quality = ind.quality \
-                                  + info.min_dist[
-                                      inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i + 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
-                                  + info.min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
-                                  + info.min_dist[inst_tasks[task1].v, inst_tasks[task2].u] \
-                                  + info.min_dist[inst_tasks[task2].v, inst_tasks[task_routes[s2, j]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u]
+                                  + min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i + 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
+                                  + min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
+                                  + min_dist[inst_tasks[task1].v, inst_tasks[task2].u] \
+                                  + min_dist[inst_tasks[task2].v, inst_tasks[task_routes[s2, j]].u] \
+                                  - min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u]
                         tmp_move.quality = quality
                         tmp_move.exceed_load = exceed_load
                         tmp_move.calculate_fitness(coef)
@@ -1310,19 +1301,14 @@ class MAENS:
                         task1 = inst_tasks[task_routes[s1, i]].inverse
                         task2 = inst_tasks[task_routes[s1, i + 1]].inverse
                         quality = ind.quality \
-                                  + info.min_dist[
-                                      inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i + 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
-                                  + info.min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
-                                  + info.min_dist[inst_tasks[task1].v, inst_tasks[task2].u] \
-                                  + info.min_dist[inst_tasks[task2].v, inst_tasks[task_routes[s2, j]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u]
+                                  + min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i + 1]].v, inst_tasks[task_routes[s1, i + 2]].u] \
+                                  + min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
+                                  + min_dist[inst_tasks[task1].v, inst_tasks[task2].u] \
+                                  + min_dist[inst_tasks[task2].v, inst_tasks[task_routes[s2, j]].u] \
+                                  - min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u]
                         tmp_move.quality = quality
                         tmp_move.exceed_load = exceed_load
                         tmp_move.calculate_fitness(coef)
@@ -1342,6 +1328,7 @@ class MAENS:
     def swap(self, ind: Solution, coef):
         info = self.info
         inst_tasks = info.tasks
+        min_dist = info.min_dist
 
         task_routes[0, 0] = 1
         task_routes[1, 0] = 1
@@ -1371,39 +1358,29 @@ class MAENS:
                             continue
                         targ_pos = j
                         exceed_load = ind.exceed_load
-                        if ind.loads[s1] > info.capacity:
-                            exceed_load -= ind.loads[s1] - info.capacity
-                        if ind.loads[s2] > info.capacity:
-                            exceed_load -= ind.loads[s2] - info.capacity
-                        if ind.loads[s1] - inst_tasks[task_routes[s1, i]].demand + inst_tasks[
-                            task_routes[s2, j]].demand > info.capacity:
-                            exceed_load += ind.loads[s1] \
+                        exceed_load -= max(ind.loads[s1] - info.capacity, 0)
+                        exceed_load -= max(ind.loads[s2] - info.capacity, 0)
+                        exceed_load += max(ind.loads[s1] \
                                            - inst_tasks[task_routes[s1, i]].demand \
-                                           + inst_tasks[task_routes[s2, j]] \
-                                           - info.capacity
-                        if ind.loads[s2] + inst_tasks[task_routes[s1, i]].demand - inst_tasks[
-                            task_routes[s2, j]].demand > info.capacity:
-                            exceed_load += ind.loads[s2] \
+                                           + inst_tasks[task_routes[s2, j]].demand \
+                                           - info.capacity, 0)
+                        exceed_load += max(ind.loads[s2] \
                                            + inst_tasks[task_routes[s1, i]].demand \
                                            - inst_tasks[task_routes[s2, j]].demand \
-                                           - info.capacity
+                                           - info.capacity, 0)
 
                         task1 = task_routes[s1, i]
                         task2 = task_routes[s2, j]
 
                         quality = ind.quality \
-                                  + info.min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task2].u] \
-                                  + info.min_dist[inst_tasks[task2].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  + info.min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
-                                  + info.min_dist[inst_tasks[task1].v, inst_tasks[task_routes[s2, j + 1]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s2, j]].v, inst_tasks[task_routes[s2, j + 1]].u]
+                                  + min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task2].u] \
+                                  + min_dist[inst_tasks[task2].v, inst_tasks[task_routes[s1, i + 1]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
+                                  + min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
+                                  + min_dist[inst_tasks[task1].v, inst_tasks[task_routes[s2, j + 1]].u] \
+                                  - min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u] \
+                                  - min_dist[inst_tasks[task_routes[s2, j]].v, inst_tasks[task_routes[s2, j + 1]].u]
                         tmp_move.quality = quality
                         tmp_move.exceed_load = exceed_load
                         tmp_move.calculate_fitness(coef)
@@ -1422,18 +1399,14 @@ class MAENS:
                         task1 = inst_tasks[task_routes[s1, i]].inverse
                         task2 = task_routes[s2, j]
                         quality = ind.quality \
-                                  + info.min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task2].u] \
-                                  + info.min_dist[inst_tasks[task2].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  + info.min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
-                                  + info.min_dist[inst_tasks[task1].v, inst_tasks[task_routes[s2, j + 1]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s2, j]].v, inst_tasks[task_routes[s2, j + 1]].u]
+                                  + min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task2].u] \
+                                  + min_dist[inst_tasks[task2].v, inst_tasks[task_routes[s1, i + 1]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
+                                  + min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
+                                  + min_dist[inst_tasks[task1].v, inst_tasks[task_routes[s2, j + 1]].u] \
+                                  - min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u] \
+                                  - min_dist[inst_tasks[task_routes[s2, j]].v, inst_tasks[task_routes[s2, j + 1]].u]
                         tmp_move.quality = quality
                         tmp_move.exceed_load = exceed_load
                         tmp_move.calculate_fitness(coef)
@@ -1452,18 +1425,14 @@ class MAENS:
                         task1 = task_routes[s1, i]
                         task2 = inst_tasks[task_routes[s1, i + 1]].inverse
                         quality = ind.quality \
-                                  + info.min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task2].u] \
-                                  + info.min_dist[inst_tasks[task2].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  + info.min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
-                                  + info.min_dist[inst_tasks[task1].v, inst_tasks[task_routes[s2, j + 1]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s2, j]].v, inst_tasks[task_routes[s2, j + 1]].u]
+                                  + min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task2].u] \
+                                  + min_dist[inst_tasks[task2].v, inst_tasks[task_routes[s1, i + 1]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
+                                  + min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
+                                  + min_dist[inst_tasks[task1].v, inst_tasks[task_routes[s2, j + 1]].u] \
+                                  - min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u] \
+                                  - min_dist[inst_tasks[task_routes[s2, j]].v, inst_tasks[task_routes[s2, j + 1]].u]
                         tmp_move.quality = quality
                         tmp_move.exceed_load = exceed_load
                         tmp_move.calculate_fitness(coef)
@@ -1482,18 +1451,14 @@ class MAENS:
                         task1 = inst_tasks[task_routes[s1, i]].inverse
                         task2 = inst_tasks[task_routes[s1, i + 1]].inverse
                         quality = ind.quality \
-                                  + info.min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task2].u] \
-                                  + info.min_dist[inst_tasks[task2].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  + info.min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
-                                  + info.min_dist[inst_tasks[task1].v, inst_tasks[task_routes[s2, j + 1]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u] \
-                                  - info.min_dist[
-                                      inst_tasks[task_routes[s2, j]].v, inst_tasks[task_routes[s2, j + 1]].u]
+                                  + min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task2].u] \
+                                  + min_dist[inst_tasks[task2].v, inst_tasks[task_routes[s1, i + 1]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
+                                  - min_dist[inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
+                                  + min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
+                                  + min_dist[inst_tasks[task1].v, inst_tasks[task_routes[s2, j + 1]].u] \
+                                  - min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u] \
+                                  - min_dist[inst_tasks[task_routes[s2, j]].v, inst_tasks[task_routes[s2, j + 1]].u]
                         tmp_move.quality = quality
                         tmp_move.exceed_load = exceed_load
                         tmp_move.calculate_fitness(coef)
@@ -1584,37 +1549,42 @@ class MAENS:
                 r = random.random()
                 if r < self.pls:
                     # do local search
-                    sls = self.lns_mut(sx, best_fsb_solution)
+                    sls, best_fsb_solution = self.lns_mut(sx, best_fsb_solution)
                     if sls not in self.population[:ptr]:
                         child = sls
 
-                # if child == s1:
-                #     self.population[s1_idx] = child
-                # elif child == s2:
-                #     self.population[s2_idx] = child
-                # elif child.quality > 0:
-                #     self.population[ptr] = child
-                #     ptr += 1
-                if child.quality > 0:
+                if child.quality > 0 and child != s1 and child != s2:
                     self.population[ptr] = child
                     ptr += 1
 
             # stochastic ranking
             self.stochastic_rank()
-            # pf = 0.45
-            # for i in range(total_size):
-            #     for j in range(i):
-            #         r = random.random()
-            #         if (self.population[j].exceed_load == 0 and self.population[j + 1].exceed_load == 0) \
-            #                 or r < pf:
-            #             if self.population[j].quality > self.population[j + 1].quality:
-            #                 self.population[j], self.population[j + 1] = self.population[j + 1], self.population[j]
-            #         elif self.population[j].exceed_load > self.population[j + 1].exceed_load[j + 1]:
-            #             self.population[j], self.population[j + 1] = self.population[j + 1], self.population[j]
 
             if best_fsb_solution.quality < old_best.quality:
                 old_best = best_fsb_solution
             print('MAENS: ', counter, ' ', best_fsb_solution.quality)
 
-        print('MAENS: ', counter, ' ', old_best.quality)
+        # print('MAENS: ', counter, ' ', old_best.quality)
         return old_best
+
+    def route_converter(self, dst: Solution, src: Solution):
+        inst_task = self.info.tasks
+        load = 0
+        dst.task_seq[0] = 1
+        dst.task_seq[1] = 0
+        cnt_task, cnt_load = 0, 0
+        # task_seq[i] == 0: 一条路径的结束点, 下一条路径的起始点;
+        #                   相应load[i]对应该路径的load
+        #             != 0: 任务编号
+        for i in range(2, src.task_seq[0] + 1):
+            if src.task_seq[i] == 0:
+                cnt_task += 1
+                dst.task_seq[cnt_task] = 0
+                cnt_load += 1
+                dst.loads[cnt_load] = load
+                continue
+            load += inst_task[src.task_seq[i]].demand
+            cnt_task += 1
+            dst.task_seq[cnt_task] = src.task_seq[i]
+        dst.task_seq[0] = cnt_task
+        dst.loads[0] = cnt_load

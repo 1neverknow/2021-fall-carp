@@ -29,9 +29,9 @@ class Insert:
 
 
 class Move:
-    def __init__(self, type, task1=None, task2=None,
-                 orig_seg=None, targ_seg=None, orig_pos=0, targ_pos=0,
-                 quality=0, exceed_load=0):
+    def __init__(self, type, task1=0, task2=0,
+                 orig_seg=0, targ_seg=0, orig_pos=0, targ_pos=0,
+                 quality=np.inf, exceed_load=np.inf):
         # type = 1, 2, 3 -> single insert, double insert, swap
         self.type = type
         self.task1 = task1

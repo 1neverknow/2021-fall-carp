@@ -22,12 +22,14 @@ class CarpEngine:
         def format_solution(s):
             s_print = []
             for p in s:
+                s_print.append(0)
                 s_print.extend(p)
+                s_print.append(0)
             return s_print
 
         routes = solution.routes
         print("s", (",".join(str(d) for d in format_solution(routes))).replace(" ", ""))
-        print("q", solution.total_cost)
+        print("q", int(solution.total_cost))
 
     def solve(self):
         avg_time = 0
@@ -69,7 +71,7 @@ if __name__ == '__main__':
     import sys
 
     if len(sys.argv) == 1:
-        sys.argv = ['CARP_solver.py', '../CARP_samples/gdb1.dat', '-t', '10', '-s', '1']
+        sys.argv = ['CARP_solver.py', '../CARP_samples/egl-e1-A.dat', '-t', '10', '-s', '1']
 
     filename, termination, seed = [sys.argv[i] for i in range(len(sys.argv)) if i % 2 == 1]
     termination = int(termination)
