@@ -4,7 +4,7 @@ get_str = lambda s: s.split(': ')[-1].rstrip('\n')
 get_int = lambda s: int(get_str(s))
 
 
-class Edge:
+class Task:
     def __init__(self, u, v, cost, demand):
         self.u = u
         self.v = v
@@ -12,10 +12,10 @@ class Edge:
         self.demand = demand
 
     def __hash__(self):
-        return hash((self.u, self.v)) + hash((self.v, self.u))
+        return hash((self.u, self.v))
 
     def __eq__(self, other):
-        return self.u, self.v == other.u, other.v or self.u, self.v == other.v, other.u
+        return self.u, self.v == other.u, other.v
 
     def __str__(self):
         return str((self.u, self.v, self.cost, self.demand))
@@ -53,8 +53,7 @@ class Info:
         self.capacity = get_int(info[6])
         self.total_cost = get_int(info[7])
 
-        self.edges = dict()  # all edges
-        self.tasks = dict()  # all required edges
+        self.tasks = dict()
         data = map(lambda s: s.split(), self.instance[9:-1])
         # full of inf, ps: the vertices +1 means start from 1
         matrix = np.full((self.vertices + 1, self.vertices + 1), np.inf)
@@ -62,12 +61,12 @@ class Info:
 
         for line in data:
             u, v, cost, demand = int(line[0]), int(line[1]), int(line[2]), int(line[3])
-            edge = Edge(u, v, cost, demand)
-            self.edges[(u, v)] = edge
-            self.edges[(v, u)] = edge
             if demand:  # demand != 0
-                self.tasks[(u, v)] = edge
-                self.tasks[(v, u)] = edge
+                task = Task(u, v, cost, demand)
+                self.tasks[(u, v)] = task
+                self.tasks[(v, u)] = task
             matrix[u, v] = cost
             matrix[v, u] = cost
+        self.tasks[(self.depot, self.depot)] = Task(self.depot, self.depot, 0, 0)
+
         self.min_dist = floyd(matrix)
