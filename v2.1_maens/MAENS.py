@@ -6,6 +6,11 @@ from itertools import combinations
 
 from definition import Solution, Insert, Move
 
+Mtrial = 10
+Mprob = 0.2
+Gmax = 100
+Mwite = 100
+
 MAX_TASK_TAG_LENGTH = 500
 MAX_TASK_SEG_LENGTH = 550
 MAX_TASK_SEQ_LENGTH = 500
@@ -16,18 +21,19 @@ MAX_ENSSIZE = 100  # max ENS neighborhood size
 
 
 def find_element_position(position, arr, e):
-    position[0] = 0
-    pos = np.where(arr[1:arr[0] + 1] == e)[0]
-    pos = pos + 1
-    idx = np.arange(1, len(pos) + 1)
-    position[idx] = pos
-    position[0] = len(pos)
-    return position
     # position[0] = 0
-    # for i in range(1, arr[0] + 1):
-    #     if arr[i] == e:
-    #         position[0] += 1
-    #         position[position[0]] = i
+    # pos = np.where(arr[1:arr[0] + 1] == e)[0]
+    # pos = pos + 1
+    # idx = np.arange(1, len(pos) + 1)
+    # position[idx] = pos
+    # position[0] = len(pos)
+    # return position
+    position[0] = 0
+    for i in range(1, arr[0] + 1):
+        if arr[i] == e:
+            position[0] += 1
+            position[position[0]] = i
+    return position
 
 
 def del_element(arr, k):
@@ -54,15 +60,16 @@ def add_element(arr, e, k):
         return
     arr[k + 1:arr[0]+2] = arr[k:arr[0]+1]
     arr[k] = e
+    arr[0] += 1
     return arr
 
 
-def assign_subroute(route1, k1, k2, route2):
+def assign_subroute(src, k1, k2, dst):
     # assign route1[k1:k2] to route2
     length = k2 - k1 + 1
-    route2[0] = length
-    route2[1:length + 1] = route1[k1:k2 + 1]
-    return route2
+    dst[0] = length
+    dst[1:length + 1] = src[k1:k2 + 1]
+    return dst
 
 def join_routes(joint_arr, arr):
     # for i in range(1, route2[0] + 1):
@@ -94,21 +101,6 @@ def ind_route_converter(src: Solution, inst_task):
         load += inst_task[src.task_seq[i]].demand
         task_seq[0] += 1
         task_seq[task_seq[0]] = src.task_seq[i]
-    # task_pointer = 1
-    # load_pointer = 0
-    # for task in src.task_seq[2:src.task_seq[0] + 1]:
-    #     if task == 0:
-    #         task_pointer += 1
-    #         # dst.task_seq[task_pointer] = 0
-    #         load_pointer += 1
-    #         loads[load_pointer] = load
-    #         load = 0
-    #         continue
-    #     load += inst_task[task].demand
-    #     task_pointer += 1
-    #     task_seq[task_pointer] = task
-    # task_seq[0] = task_pointer
-    # loads[0] = load_pointer
     return Solution(task_seq=task_seq, loads=loads, quality=src.quality, exceed_load=0)
 
 
@@ -122,6 +114,8 @@ class MAENS:
         self.ubtrial = 50
         # 每次迭代生成的后代数量
         self.opsize = 6 * self.psize
+        # 每回合生成的解的总数
+        self.total_size = self.psize + self.opsize
         # Probability of carrying out local search (mutation)
         self.pls = 0.2
         # Number of routes involved in Merge-Split operator
@@ -142,48 +136,56 @@ class MAENS:
             lambda x, y, c: from_head_to_depot(x.v) > from_head_to_depot(y.v) if c < self.info.capacity / 2
             else from_head_to_depot(x.v) < from_head_to_depot(y.v)
         ]
-        self.eq_rules = [
-            lambda x, y, c: from_head_to_depot(x.v) == from_head_to_depot(y.v),
-            lambda x, y, c: from_head_to_depot(x.v) == from_head_to_depot(y.v),
-            lambda x, y, c: x.demand / x.cost == y.demand / y.cost,
-            lambda x, y, c: x.demand / x.cost == y.demand / y.cost,
-            lambda x, y, c: from_head_to_depot(x.v) == from_head_to_depot(y.v) if c < self.info.capacity / 2
-            else from_head_to_depot(x.v) == from_head_to_depot(y.v)
-        ]
+        # self.eq_rules = [
+        #     lambda x, y, c: from_head_to_depot(x.v) == from_head_to_depot(y.v),
+        #     lambda x, y, c: from_head_to_depot(x.v) == from_head_to_depot(y.v),
+        #     lambda x, y, c: x.demand / x.cost == y.demand / y.cost,
+        #     lambda x, y, c: x.demand / x.cost == y.demand / y.cost,
+        #     lambda x, y, c: from_head_to_depot(x.v) == from_head_to_depot(y.v) if c < self.info.capacity / 2
+        #     else from_head_to_depot(x.v) == from_head_to_depot(y.v)
+        # ]
 
     def rand_scanning(self, serve_mark):
         info = self.info
         inst_tasks = info.tasks
+        capacity = info.capacity
+        min_dist = info.min_dist
 
-        serve_task_num = len(inst_tasks) - 1
+        req_edge_num = info.edges_required
+        task_num = req_edge_num * 2
+        serve_task_num = np.sum(serve_mark[req_edge_num + 1:task_num + 1])
 
-        nearest_task = np.empty(serve_task_num + 1, dtype=int)
+        unserved_task = np.empty(MAX_TASK_TAG_LENGTH, dtype=int)
+        candi_tasks = np.empty(MAX_TASK_TAG_LENGTH + 1, dtype=int)
+        nearest_task = np.empty(MAX_TASK_TAG_LENGTH + 1, dtype=int)
+        cnt = 0
+        for i in range(1, task_num + 1):
+            if not serve_mark[i]:
+                continue
+            cnt += 1
+            unserved_task[cnt] = i
+        unserved_task[0] = cnt
+
         sequence = np.empty(MAX_TASK_SEQ_LENGTH, dtype=int)
         sequence[0] = 1
         sequence[1] = 0
-        loads = np.empty(MAX_TASK_SEQ_LENGTH, dtype=int)
+        loads = np.empty(MAX_TASK_SEG_LENGTH, dtype=int)
         loads[0] = 0
-        unserved_task = np.empty(serve_task_num + 1, dtype=int)
-        candi_task = np.empty(serve_task_num + 1, dtype=int)
-
-        for i, d in enumerate(np.where(serve_mark)[0]):
-            unserved_task[i + 1] = d
-        unserved_task[0] = serve_task_num
 
         load = 0
         trial = 0
         while trial < serve_task_num:
-            if not unserved_task[0]:
+            if unserved_task[0] == 0:
                 break
             curr_task = sequence[sequence[0]]
             counter = 0
             for i in range(1, unserved_task[0] + 1):
-                if inst_tasks[unserved_task[i]].demand + load <= info.capacity:
+                if inst_tasks[unserved_task[i]].demand + load <= capacity:
                     counter += 1
-                    candi_task[counter] = unserved_task[i]
-            candi_task[0] = counter
+                    candi_tasks[counter] = unserved_task[i]
+            candi_tasks[0] = counter
 
-            if candi_task[0] == 0:
+            if candi_tasks[0] == 0:
                 sequence[0] += 1
                 sequence[sequence[0]] = 0
                 loads[0] += 1
@@ -194,29 +196,31 @@ class MAENS:
             mindist = np.inf
             nearest_task[0] = 0
 
-            for i in range(1, candi_task[0] + 1):
-                curr_cost = info.min_dist[inst_tasks[curr_task].v, inst_tasks[candi_task[i]].u]
+            # 贪心查找最近的任务
+            for i in range(1, candi_tasks[0] + 1):
+                curr_candi_task = candi_tasks[i]
+                curr_cost = min_dist[inst_tasks[curr_task].v, inst_tasks[curr_candi_task].u]
                 if curr_cost < mindist:
                     mindist = curr_cost
                     nearest_task[0] = 1
-                    nearest_task[nearest_task[0]] = candi_task[i]
+                    nearest_task[nearest_task[0]] = curr_candi_task
                 elif curr_cost == mindist:
                     nearest_task[0] += 1
-                    nearest_task[nearest_task[0]] = candi_task[i]
+                    nearest_task[nearest_task[0]] = curr_candi_task
 
             k = random.randrange(1, nearest_task[0] + 1)
             next_task = nearest_task[k]
+            # print("next task is: ", next_task)
 
             trial += 1
             sequence[0] += 1
             sequence[sequence[0]] = next_task
             load += inst_tasks[next_task].demand
 
-            # find_element_position(positions, unserved_task, next_task)
-            # del_element(unserved_task, positions[1])
             unserved_task = del_element_by_e(unserved_task, next_task)
-            if inst_tasks[next_task].inverse > 0:
-                unserved_task = del_element_by_e(unserved_task, inst_tasks[next_task].inverse)
+            unserved_task = del_element_by_e(unserved_task, inst_tasks[next_task].inverse)
+            # if inst_tasks[next_task].inverse > 0:
+            #     unserved_task = del_element_by_e(unserved_task, inst_tasks[next_task].inverse)
 
         sequence[0] += 1
         sequence[sequence[0]] = 0
@@ -240,18 +244,14 @@ class MAENS:
         unserved_task = np.empty(MAX_TASK_TAG_LENGTH, dtype=int)
         candidate_task = np.empty(MAX_TASK_TAG_LENGTH, dtype=int)
         nearest_task = np.empty(MAX_TASK_TAG_LENGTH, dtype=int)
-        nearest_isol_task = np.empty(MAX_TASK_TAG_LENGTH, dtype=int)
-        nearest_inci_task = np.empty(MAX_TASK_TAG_LENGTH, dtype=int)
-        sel_task = np.empty(MAX_TASK_TAG_LENGTH, dtype=int)
-
         """Use five rules  to obtain solution"""
         tmp_sol_list = []
         for iter_num in range(5):
             rule = self.rules[iter_num]
-            eq_rule = self.eq_rules[iter_num]
+            # eq_rule = self.eq_rules[iter_num]
 
             sequence = np.empty(MAX_TASK_SEQ_LENGTH, dtype=int)
-            loads = np.empty(101, dtype=int)
+            loads = np.empty(MAX_TASK_SEG_LENGTH, dtype=int)
             sequence[0] = 1
             sequence[1] = 0
             loads[0] = 0
@@ -263,9 +263,6 @@ class MAENS:
                 cnt += 1
                 unserved_task[cnt] = i
             unserved_task[0] = cnt
-            # for cnt, d in enumerate(np.where(serve_mark)[0]):
-            #     unserved_task[cnt + 1] = d + 1
-            # unserved_task[0] = cnt + 1
 
             load = 0
             trial = 0
@@ -299,32 +296,44 @@ class MAENS:
                         nearest_task[0] += 1
                         nearest_task[nearest_task[0]] = candidate_task[i]
 
-                nearest_inci_task[0] = 0
-                nearest_isol_task[0] = 0
-                for i in range(1, nearest_task[0] + 1):
-                    if inst_tasks[nearest_task[i]].v == 1:
-                        nearest_inci_task[0] += 1
-                        nearest_inci_task[nearest_inci_task[0]] = nearest_task[i]
-                    else:
-                        nearest_isol_task[0] += 1
-                        nearest_isol_task[nearest_isol_task[0]] = nearest_task[i]
+                # nearest_isol_task = np.empty(MAX_TASK_TAG_LENGTH, dtype=int)
+                # nearest_inci_task = np.empty(MAX_TASK_TAG_LENGTH, dtype=int)
+                # sel_task = np.empty(MAX_TASK_TAG_LENGTH, dtype=int)
+                # nearest_inci_task[0] = 0
+                # nearest_isol_task[0] = 0
+                # for i in range(1, nearest_task[0] + 1):
+                #     if inst_tasks[nearest_task[i]].v == info.depot:
+                #         nearest_inci_task[0] += 1
+                #         nearest_inci_task[nearest_inci_task[0]] = nearest_task[i]
+                #     else:
+                #         nearest_isol_task[0] += 1
+                #         nearest_isol_task[nearest_isol_task[0]] = nearest_task[i]
+                #
+                # if nearest_isol_task[0] == 0:
+                #     nearest_isol_task[:nearest_inci_task[0]+1] = nearest_inci_task[:nearest_inci_task[0]+1]
+                # # for five phase, the above part is the same
+                #
+                # best = None
+                # sel_task[0] = 0
+                # for task in nearest_isol_task[1:nearest_isol_task[0] + 1]:
+                #     if best is None or self.is_better(inst_tasks[task], inst_tasks[best], load, rule):
+                #         best = task
+                #         sel_task[0] = 1
+                #         sel_task[1] = task
+                #     elif self.is_equal(inst_tasks[task], inst_tasks[best], load, eq_rule):
+                #         sel_task[0] += 1
+                #         sel_task[sel_task[0]] = task
+                # k = 1
+                # next_task = sel_task[k]
 
-                if nearest_isol_task[0] == 0:
-                    nearest_isol_task = nearest_inci_task[:nearest_inci_task[0]+1]
-                # for five phase, the above part is the same
+                if nearest_task[0] == 0:
+                    # no available task
+                    break
 
-                best = None
-                sel_task[0] = 0
-                for task in nearest_isol_task[1:nearest_isol_task[0] + 1]:
-                    if best is None or self.is_better(inst_tasks[task], inst_tasks[best], load, rule):
-                        best = task
-                        sel_task[0] = 1
-                        sel_task[1] = task
-                    elif self.is_equal(inst_tasks[task], inst_tasks[best], load, eq_rule):
-                        sel_task[0] += 1
-                        sel_task[sel_task[0]] = task
-                k = 1
-                next_task = sel_task[k]
+                next_task = None
+                for tsk in nearest_task[1:nearest_task[0] + 1]:
+                    if next_task is None or self.is_better(inst_tasks[tsk], inst_tasks[next_task], load, rule):
+                        next_task = tsk
 
                 trial += 1
                 sequence[0] += 1
@@ -333,8 +342,9 @@ class MAENS:
 
                 # delete the served task in unserved task array
                 unserved_task = del_element_by_e(unserved_task, next_task)
-                if inst_tasks[next_task].inverse > 0:
-                    unserved_task = del_element_by_e(unserved_task, inst_tasks[next_task].inverse)
+                unserved_task = del_element_by_e(unserved_task, inst_tasks[next_task].inverse)
+                # if inst_tasks[next_task].inverse > 0:
+                #     unserved_task = del_element_by_e(unserved_task, inst_tasks[next_task].inverse)
 
             sequence[0] += 1
             sequence[sequence[0]] = 0
@@ -385,22 +395,23 @@ class MAENS:
         info = self.info
         inst_tasks = info.tasks
         min_dist = info.min_dist
+        capacity = info.capacity
 
         # max_task_seq_length = info.edges_total
         sub_path1 = np.zeros(MAX_TASK_SEQ_LENGTH, dtype=int)
         sub_path2 = np.zeros(MAX_TASK_SEQ_LENGTH, dtype=int)
-        routes1 = np.zeros((101, MAX_TASK_SEQ_LENGTH), dtype=int)
-        routes2 = np.zeros((101, MAX_TASK_SEQ_LENGTH), dtype=int)
+        routes1 = np.zeros((MAX_TASK_SEG_LENGTH, MAX_TASK_SEQ_LENGTH), dtype=int)
+        routes2 = np.zeros((MAX_TASK_SEG_LENGTH, MAX_TASK_SEQ_LENGTH), dtype=int)
 
         """ define: candidate selection:
                 (routeID, position)
         """
-        candidate_list1, candidate_list2 = [], []
+        candidate_list1, candidate_list2 = [None], [None]
 
         # starting index for each route
-        position = np.zeros(101, dtype=int)
+        position = np.zeros(MAX_TASK_SEG_LENGTH, dtype=int)
         # exceed loads for each route
-        xclds = np.zeros(101, dtype=int)
+        xclds = np.zeros(MAX_TASK_SEG_LENGTH, dtype=int)
         left_tasks = np.zeros(MAX_TASK_SEQ_LENGTH, dtype=int)
 
         position = find_element_position(position, s1.task_seq, 0)
@@ -484,13 +495,13 @@ class MAENS:
             pare_to_set_size = 0
             curr_task = 0
             for j in range(1, routes1[0, 0]):
-                if routes1[j, 0] == 2:
+                if routes1[j, 0] == 2:    # 空路径
                     continue
                 curr_task = left_tasks[n]
-                if xclds[j] > info.capacity:
+                if xclds[j] > capacity:
                     ivload = inst_tasks[curr_task].demand
-                elif xclds[j] > info.capacity - inst_tasks[curr_task].demand:
-                    ivload = xclds[j] + inst_tasks[curr_task].demand - info.capacity
+                elif xclds[j] + inst_tasks[curr_task].demand > capacity:
+                    ivload = xclds[j] + inst_tasks[curr_task].demand - capacity
                 else:
                     ivload = 0
 
@@ -527,7 +538,7 @@ class MAENS:
 
                     w = inst_tasks[curr_task].inverse
                     candidate_insert_cnt += 1
-                    insert_cost = min_dist[inst_tasks[routes1[j, k - 1]].v, inst_tasks[curr_task].u] \
+                    insert_cost = min_dist[inst_tasks[routes1[j, k - 1]].v, inst_tasks[w].u] \
                                   + min_dist[inst_tasks[w].v, inst_tasks[routes1[j, k]].u] \
                                   - min_dist[inst_tasks[routes1[j, k - 1]].v, inst_tasks[routes1[j, k]].u]
                     candidate_insertions[candidate_insert_cnt] = Insert(task=w, routeID=j, position=k, cost=insert_cost, exceed_load=ivload)
@@ -556,6 +567,7 @@ class MAENS:
             insert_cost = min_dist[info.depot, inst_tasks[curr_task].u] \
                           + min_dist[inst_tasks[curr_task].v, info.depot]
             candidate_insertions[candidate_insert_cnt] = Insert(task=curr_task, routeID=0, position=2, cost=insert_cost, exceed_load=0)
+            # candidate_insertions[candidate_insert_cnt] = Insert(task=curr_task, routeID=routes1[0, 0] + 1, position=2, cost=insert_cost, exceed_load=0)
 
             out[0] = 0
             add = True
@@ -601,7 +613,7 @@ class MAENS:
             sequence[0] -= 1
             sequence = join_routes(sequence, routes1[i])
 
-        loads = xclds.copy()
+        loads = xclds
         for i in range(loads[0], 0, -1):
             if loads[i] == 0:
                 loads = del_element(loads, i)
@@ -609,7 +621,6 @@ class MAENS:
         quality = self.get_task_seq_cost(sequence, inst_tasks)
         exceed_load = self.get_exceed_loads(loads)
         return Solution(sequence, loads, quality, exceed_load)
-
 
     def lns_mut(self, sx: Solution, best_fsb_solution: Solution):
         info = self.info
@@ -622,107 +633,42 @@ class MAENS:
         count, count1 = 0, 0
         count_fsb, count_infsb = 0, 0
 
-        imp = 1  # improved
-        count1 = 0
-        while imp:
-            count += 1
-            count1 += 1
-            imp = 0
+        nsize_arr = [1, 2, 1]
+        for nsize in nsize_arr:
+            imp = True  # improved
+            count1 = 0
+            while imp:
+                count += 1
+                count1 += 1
+                imp = False
 
-            if sls.exceed_load == 0:
-                count_fsb += 1
-            else:
-                count_infsb += 1
+                if sls.exceed_load == 0:
+                    count_fsb += 1
+                else:
+                    count_infsb += 1
 
-            if count % 5 == 0:
-                # 系数随着迭代次数和可行解数量改变
-                if count_fsb == 5:
-                    coef /= 5
-                    sls.calculate_fitness(coef)
-                elif count_infsb == 5:
-                    coef *= 5
-                    sls.calculate_fitness(coef)
-                count_fsb = 0
-                count_infsb = 0
+                if count % 5 == 0:
+                    # 系数随着迭代次数和可行解数量改变
+                    if count_fsb == 5:
+                        coef /= 5
+                        sls.calculate_fitness(coef)
+                    elif count_infsb == 5:
+                        coef *= 5
+                        sls.calculate_fitness(coef)
+                    count_fsb = 0
+                    count_infsb = 0
 
-            # tmp_ind = copy.deepcopy(sls)
-            prev_fitness = sls.fitness
-            prev_quality = sls.quality
-            # traditional operator
-            sls = self.lns(sls, coef, 1)
-            if sls.fitness < prev_fitness:
-                imp = 1
-            if count1 > 50 and sls.quality < prev_quality:
-                break
-            if sls.exceed_load == 0 and sls.quality < best_fsb_solution.quality:
-                best_fsb_solution = copy.deepcopy(sls)
-
-        imp = 1  # improved
-        count1 = 0
-        while imp:
-            count += 1
-            count1 += 1
-            imp = 0
-
-            if sls.exceed_load == 0:
-                count_fsb += 1
-            else:
-                count_infsb += 1
-
-            if count % 5 == 0:
-                # 系数随着迭代次数和可行解数量改变
-                if count_fsb == 5:
-                    coef /= 5
-                    sls.calculate_fitness(coef)
-                elif count_infsb == 5:
-                    coef *= 5
-                    sls.calculate_fitness(coef)
-                count_fsb = 0
-                count_infsb = 0
-
-            prev_fitness = sls.fitness
-            prev_quality = sls.quality
-            # M-S operator (#routes = 2)
-            sls = self.lns(sls, coef, 2)
-            if sls.fitness < prev_fitness:
-                imp = 1
-            if count1 > 50 and sls.quality < prev_quality:
-                break
-            if sls.exceed_load == 0 and sls.quality < best_fsb_solution.quality:
-                best_fsb_solution = copy.deepcopy(sls)
-
-        imp = 1  # improved
-        count1 = 0
-        while imp:
-            imp = 0
-            count += 1
-            count1 += 1
-
-            if sls.exceed_load == 0:
-                count_fsb += 1
-            else:
-                count_infsb += 1
-
-            if count % 5 == 0:
-                # 系数随着迭代次数和可行解数量改变
-                if count_fsb == 5:
-                    coef /= 5
-                    sls.calculate_fitness(coef)
-                elif count_infsb == 5:
-                    coef *= 5
-                    sls.calculate_fitness(coef)
-                count_fsb = 0
-                count_infsb = 0
-
-            tmp_ind = copy.deepcopy(sls)
-            # traditional operator
-            sls = self.lns(sls, coef, 1)
-            if sls.fitness < tmp_ind.fitness:
-                imp = 1
-            if count1 > 50 and sls.quality < tmp_ind.quality:
-                break
-            if sls.exceed_load == 0 and sls.quality < best_fsb_solution.quality:
-                best_fsb_solution = copy.deepcopy(sls)
+                # tmp_ind = copy.deepcopy(sls)
+                prev_fitness = sls.fitness
+                prev_quality = sls.quality
+                # traditional operator
+                sls = self.lns(sls, coef, nsize)
+                if sls.fitness < prev_fitness:
+                    imp = True
+                if count1 > 50 and sls.quality < prev_quality:
+                    break
+                if sls.exceed_load == 0 and sls.quality < best_fsb_solution.quality:
+                    best_fsb_solution = copy.deepcopy(sls)
         return sls, best_fsb_solution
 
     def get_fitness(self, move: Move):
@@ -736,15 +682,6 @@ class MAENS:
         if nsize == 1:
             # traditional move
             next_move: Move = min([move(ind, coef) for move in self.operations], key=self.get_fitness)
-
-            # end_points = np.where(ind.task_seq[1:ind.task_seq[0] + 1] == 0)[0] + 1
-            # orig_ptr = end_points[next_move.orig_seg - 1] + next_move.orig_pos
-            # if next_move.targ_seg < len(end_points):
-            #     targ_ptr = end_points[next_move.targ_seg - 1] + next_move.targ_seg
-            # else:
-            #     # ind.task_seq[ind.task_seq[0] + 1] = 0
-            #     targ_ptr = ind.task_seq[0] + 1
-
             # 将task_route转化为ind.task_seq
             orig_ptr, targ_ptr = 0, 0
             seg_ptr1, seg_ptr2 = 0, 0
@@ -1380,132 +1317,59 @@ class MAENS:
                         #                    - inst_tasks[task_routes[s2, j]].demand \
                         #                    - info.capacity, 0)
 
-                        task1 = task_routes[s1, i]
-                        task2 = task_routes[s2, j]
+                        cand_task1 = [task_routes[s1, i], inst_tasks[task_routes[s1, i]].inverse]
+                        cand_task2 = [task_routes[s2, j], inst_tasks[task_routes[s2, j]].inverse]
+                        for task1 in cand_task1:
+                            for task2 in cand_task2:
+                                quality = ind.quality \
+                                          - min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
+                                          - min_dist[inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
+                                          + min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task2].u] \
+                                          + min_dist[inst_tasks[task2].v, inst_tasks[task_routes[s1, i + 1]].u] \
+                                          - min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u] \
+                                          - min_dist[inst_tasks[task_routes[s2, j]].v, inst_tasks[task_routes[s2, j + 1]].u] \
+                                          + min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
+                                          + min_dist[inst_tasks[task1].v, inst_tasks[task_routes[s2, j + 1]].u]
+                                tmp_move.quality = quality
+                                tmp_move.exceed_load = exceed_load
+                                tmp_move.calculate_fitness(coef)
 
-                        quality = ind.quality \
-                                  + min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task2].u] \
-                                  + min_dist[inst_tasks[task2].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  - min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
-                                  - min_dist[inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  + min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
-                                  + min_dist[inst_tasks[task1].v, inst_tasks[task_routes[s2, j + 1]].u] \
-                                  - min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u] \
-                                  - min_dist[inst_tasks[task_routes[s2, j]].v, inst_tasks[task_routes[s2, j + 1]].u]
-                        tmp_move.quality = quality
-                        tmp_move.exceed_load = exceed_load
-                        tmp_move.calculate_fitness(coef)
+                                if tmp_move.fitness < best_move.fitness:
+                                    best_move.fitness = tmp_move.fitness
+                                    best_move.task1 = task1
+                                    best_move.task2 = task2
+                                    best_move.orig_seg = orig_seg
+                                    best_move.targ_seg = targ_seg
+                                    best_move.orig_pos = orig_pos
+                                    best_move.targ_pos = targ_pos
+                                    best_move.quality = quality
+                                    best_move.exceed_load = exceed_load
 
-                        if tmp_move.fitness < best_move.fitness:
-                            best_move.fitness = tmp_move.fitness
-                            best_move.task1 = task1
-                            best_move.task2 = task2
-                            best_move.orig_seg = orig_seg
-                            best_move.targ_seg = targ_seg
-                            best_move.orig_pos = orig_pos
-                            best_move.targ_pos = targ_pos
-                            best_move.quality = quality
-                            best_move.exceed_load = exceed_load
-
-                        task1 = inst_tasks[task_routes[s1, i]].inverse
-                        task2 = task_routes[s2, j]
-                        quality = ind.quality \
-                                  + min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task2].u] \
-                                  + min_dist[inst_tasks[task2].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  - min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
-                                  - min_dist[inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  + min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
-                                  + min_dist[inst_tasks[task1].v, inst_tasks[task_routes[s2, j + 1]].u] \
-                                  - min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u] \
-                                  - min_dist[inst_tasks[task_routes[s2, j]].v, inst_tasks[task_routes[s2, j + 1]].u]
-                        tmp_move.quality = quality
-                        tmp_move.exceed_load = exceed_load
-                        tmp_move.calculate_fitness(coef)
-
-                        if tmp_move.fitness < best_move.fitness:
-                            best_move.fitness = tmp_move.fitness
-                            best_move.task1 = task1
-                            best_move.task2 = task2
-                            best_move.orig_seg = orig_seg
-                            best_move.targ_seg = targ_seg
-                            best_move.orig_pos = orig_pos
-                            best_move.targ_pos = targ_pos
-                            best_move.quality = quality
-                            best_move.exceed_load = exceed_load
-
-                        task1 = task_routes[s1, i]
-                        task2 = inst_tasks[task_routes[s1, i + 1]].inverse
-                        quality = ind.quality \
-                                  + min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task2].u] \
-                                  + min_dist[inst_tasks[task2].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  - min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
-                                  - min_dist[inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  + min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
-                                  + min_dist[inst_tasks[task1].v, inst_tasks[task_routes[s2, j + 1]].u] \
-                                  - min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u] \
-                                  - min_dist[inst_tasks[task_routes[s2, j]].v, inst_tasks[task_routes[s2, j + 1]].u]
-                        tmp_move.quality = quality
-                        tmp_move.exceed_load = exceed_load
-                        tmp_move.calculate_fitness(coef)
-
-                        if tmp_move.fitness < best_move.fitness:
-                            best_move.fitness = tmp_move.fitness
-                            best_move.task1 = task1
-                            best_move.task2 = task2
-                            best_move.orig_seg = orig_seg
-                            best_move.targ_seg = targ_seg
-                            best_move.orig_pos = orig_pos
-                            best_move.targ_pos = targ_pos
-                            best_move.quality = quality
-                            best_move.exceed_load = exceed_load
-
-                        task1 = inst_tasks[task_routes[s1, i]].inverse
-                        task2 = inst_tasks[task_routes[s1, i + 1]].inverse
-                        quality = ind.quality \
-                                  + min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task2].u] \
-                                  + min_dist[inst_tasks[task2].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  - min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
-                                  - min_dist[inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                  + min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
-                                  + min_dist[inst_tasks[task1].v, inst_tasks[task_routes[s2, j + 1]].u] \
-                                  - min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u] \
-                                  - min_dist[inst_tasks[task_routes[s2, j]].v, inst_tasks[task_routes[s2, j + 1]].u]
-                        tmp_move.quality = quality
-                        tmp_move.exceed_load = exceed_load
-                        tmp_move.calculate_fitness(coef)
-
-                        if tmp_move.fitness < best_move.fitness:
-                            best_move.fitness = tmp_move.fitness
-                            best_move.task1 = task1
-                            best_move.task2 = task2
-                            best_move.orig_seg = orig_seg
-                            best_move.targ_seg = targ_seg
-                            best_move.orig_pos = orig_pos
-                            best_move.targ_pos = targ_pos
-                            best_move.quality = quality
-                            best_move.exceed_load = exceed_load
         return best_move
 
     def initialize(self):
-        task_num = len(self.info.tasks) - 1
-        trial = 0
+        task_num = self.info.edges_required * 2
         population = []
-        best_fsb_solution = Solution(None, None, np.inf, 0)
+        best_fsb_solution = Solution(None, None, np.inf, np.inf)
         # population.append(best_fsb_solution)
-        while trial < self.ubtrial and len(population) < self.psize:
-            trial += 1
-            serve_mark = np.zeros(MAX_TASK_TAG_LENGTH, dtype=int)
-            serve_mark[1:task_num + 1] = 1
-            # serve_mark = np.append(np.ones(task_num, dtype=int), np.zeros(MAX_TASK_TAG_LENGTH - task_num, dtype=int))
-            init_ind = self.rand_scanning(serve_mark)
-            if init_ind in population and trial != self.ubtrial:
-                continue
-            population.append(init_ind)
-            if init_ind.exceed_load == 0 and init_ind.quality < best_fsb_solution.quality:
-                best_fsb_solution = init_ind
+        while len(population) < self.psize:
+            trial = 0
+            while trial < Mtrial:
+                serve_mark = np.zeros(MAX_TASK_TAG_LENGTH, dtype=int)
+                serve_mark[1:task_num + 1] = 1
+                init_ind = self.rand_scanning(serve_mark)
+                if init_ind in population and trial != Mtrial:
+                    continue
+                elif trial == Mtrial:
+                    break
+                population.append(init_ind)
+                if init_ind.exceed_load == 0 and init_ind.quality < best_fsb_solution.quality:
+                    best_fsb_solution = init_ind
+                break
         self.psize = len(population)
         self.opsize = 6 * self.psize
-        self.population = [[]] * (self.psize + self.opsize)
+        self.total_size = self.psize + self.opsize
+        self.population = [None] * (self.total_size)
         self.population[:self.psize] = population
         return best_fsb_solution
 
@@ -1513,14 +1377,14 @@ class MAENS:
         s1_idx = random.randrange(0, self.psize)
         s2_idx = random.randrange(0, self.psize)
         while s1_idx == s2_idx:
-            s2_idx = random.randrange(1, self.psize)
+            s2_idx = random.randrange(0, self.psize)
         s1 = self.population[s1_idx]
         s2 = self.population[s2_idx]
         return s1, s2
 
     def stochastic_rank(self):
         pf = 0.45
-        total_size = self.psize + self.opsize
+        total_size = self.total_size
         for i in range(total_size):
             for j in range(i):
                 r = random.random()
@@ -1531,9 +1395,10 @@ class MAENS:
                 elif self.population[j].exceed_load > self.population[j + 1].exceed_load:
                     self.population[j], self.population[j + 1] = self.population[j + 1], self.population[j]
 
+
     def maens(self):
         best_fsb_solution = self.initialize()
-        total_size = self.psize + self.opsize
+        total_size = self.total_size
         counter = 0
         wite = 0
         old_best = Solution(None, None, np.inf, 0)
@@ -1542,11 +1407,10 @@ class MAENS:
             counter += 1
             wite += 1
             ptr = self.psize
-            child = None
+            child = Solution(None, None, -1, -1)
             while ptr < total_size:
                 # randomly select two parents
                 s1, s2 = self.random_select()
-
                 # crossover
                 sx = self.SBX(s1, s2)
                 if sx.exceed_load == 0 and sx.quality < best_fsb_solution.quality:
@@ -1577,24 +1441,24 @@ class MAENS:
             print('MAENS: ', counter, ' ', best_fsb_solution.quality)
         return old_best
 
-    def route_converter(self, dst: Solution, src: Solution):
-        inst_task = self.info.tasks
-        load = 0
-        dst.task_seq[0] = 1
-        dst.task_seq[1] = 0
-        cnt_task, cnt_load = 0, 0
-        # task_seq[i] == 0: 一条路径的结束点, 下一条路径的起始点;
-        #                   相应load[i]对应该路径的load
-        #             != 0: 任务编号
-        for i in range(2, src.task_seq[0] + 1):
-            if src.task_seq[i] == 0:
-                cnt_task += 1
-                dst.task_seq[cnt_task] = 0
-                cnt_load += 1
-                dst.loads[cnt_load] = load
-                continue
-            load += inst_task[src.task_seq[i]].demand
-            cnt_task += 1
-            dst.task_seq[cnt_task] = src.task_seq[i]
-        dst.task_seq[0] = cnt_task
-        dst.loads[0] = cnt_load
+    # def route_converter(self, dst: Solution, src: Solution):
+    #     inst_task = self.info.tasks
+    #     load = 0
+    #     dst.task_seq[0] = 1
+    #     dst.task_seq[1] = 0
+    #     cnt_task, cnt_load = 0, 0
+    #     # task_seq[i] == 0: 一条路径的结束点, 下一条路径的起始点;
+    #     #                   相应load[i]对应该路径的load
+    #     #             != 0: 任务编号
+    #     for i in range(2, src.task_seq[0] + 1):
+    #         if src.task_seq[i] == 0:
+    #             cnt_task += 1
+    #             dst.task_seq[cnt_task] = 0
+    #             cnt_load += 1
+    #             dst.loads[cnt_load] = load
+    #             continue
+    #         load += inst_task[src.task_seq[i]].demand
+    #         cnt_task += 1
+    #         dst.task_seq[cnt_task] = src.task_seq[i]
+    #     dst.task_seq[0] = cnt_task
+    #     dst.loads[0] = cnt_load

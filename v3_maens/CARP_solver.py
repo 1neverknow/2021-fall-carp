@@ -1,10 +1,10 @@
 import os
 import random
 import time
-import numpy as np
 
-from CARP_info import Info
-from MAENS import MAENS
+from CARP_info import *
+from CARP_ai import MAENS
+
 
 # from CARP_algorithm import CARPAlgorithm as MAEN
 
@@ -12,7 +12,6 @@ class CarpEngine:
     def __init__(self, filename, termination, seed, test=False):
         self.info = Info(filename)
         self.termination = termination
-        self.seed = seed
         self.test = test
 
         random.seed(seed)
@@ -44,7 +43,7 @@ class CarpEngine:
         best = None
         while remain_time > 2 * avg_time:
             iter_start = time.perf_counter()
-            best = solver.maens()
+            best = solver.run()
             iter_end = time.perf_counter()
             iter_duration = iter_end - iter_start
             iter_count += 1
@@ -71,11 +70,11 @@ if __name__ == '__main__':
     import sys
 
     if len(sys.argv) == 1:
-        sys.argv = ['CARP_solver.py', '../CARP_samples/gdb1.dat', '-t', '10', '-s', '1']
+        sys.argv = ['CARP_solver.py', '../CARP_samples/egl-e1-A.dat', '-t', '10', '-s', '1']
 
     filename, termination, seed = [sys.argv[i] for i in range(len(sys.argv)) if i % 2 == 1]
     termination = int(termination)
-    seed = int(seed)
+    seed = int(seed) % 4294967296
 
-    engine = CarpEngine(filename, termination, seed, test=True)
+    engine = CarpEngine(filename, termination, seed)
     engine.solve()
