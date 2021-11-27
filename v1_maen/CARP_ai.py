@@ -23,7 +23,7 @@ class MAENS:
     def __init__(self, info):
         self.info = info
         self.mutation_rate = 0.2
-        self.population_size = 50
+        self.population_size = 100
         self.ubtrial = 80
 
         """ 

@@ -45,25 +45,25 @@ class CarpEngine:
         iter_count = 0
         while remain_time > 2 * avg_time:
             iter_start = time.perf_counter()
-            solver.solve(iter_count + solver.psize)
+            solver.solve()
             iter_end = time.perf_counter()
             iter_duration = iter_end - iter_start
             iter_count += 1
             total_time += iter_duration
             avg_time = 0.6 * avg_time + 0.4 * iter_duration
             remain_time -= iter_duration
-            if self.test:
-                print(
-                    'pid: {} \tsample: {} \titer {} \t\tpopulation: {} \ttime: {:5.3} s \tavg: {:5.3} s \tremain: {:.3f} s \tcost: {}'.format(
-                        os.getpid(),
-                        self.info.name.split('\\')[-1],
-                        iter_count,
-                        len(solver.population),
-                        iter_duration,
-                        avg_time,
-                        remain_time,
-                        solver.best_fsb_solution.quality)
-                )
+            # if self.test:
+            #     print(
+            #         'pid: {} \tsample: {} \titer {} \t\tpopulation: {} \ttime: {:5.3} s \tavg: {:5.3} s \tremain: {:.3f} s \tcost: {}'.format(
+            #             os.getpid(),
+            #             self.info.name.split('\\')[-1],
+            #             iter_count,
+            #             len(solver.population),
+            #             iter_duration,
+            #             avg_time,
+            #             remain_time,
+            #             solver.best_fsb_solution.quality)
+            #     )
         self.output(solver.best_fsb_solution)
 
 
@@ -71,7 +71,7 @@ if __name__ == '__main__':
     import sys
 
     if len(sys.argv) == 1:
-        sys.argv = ['CARP_solver.py', '../CARP_samples/egl-e1-A.dat', '-t', '10', '-s', '1']
+        sys.argv = ['CARP_solver.py', '../CARP_samples/egl-s1-A.dat', '-t', '30', '-s', '1']
 
     filename, termination, seed = [sys.argv[i] for i in range(len(sys.argv)) if i % 2 == 1]
     termination = int(termination)

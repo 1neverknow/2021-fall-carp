@@ -14,7 +14,6 @@ Mwite = 100
 MAX_TASK_TAG_LENGTH = 500
 MAX_TASK_SEG_LENGTH = 550
 MAX_TASK_SEQ_LENGTH = 500
-task_routes = np.zeros((101, MAX_TASK_SEG_LENGTH), dtype=int)
 
 MAX_NSIZE = 10  # upper bound of n size
 MAX_ENSSIZE = 100  # max ENS neighborhood size
@@ -91,6 +90,7 @@ def ind_route_converter(src: Solution, inst_task):
 
 
 def chunk_task_seq(task_seq):
+    task_routes = np.zeros((101, MAX_TASK_SEG_LENGTH), dtype=int)
     seg_start = np.where(task_seq[1:task_seq[0] + 1] == 0)[0] + 1
     for route_ptr in range(1, len(seg_start)):
         from_idx, to_idx = seg_start[route_ptr - 1], seg_start[route_ptr]
@@ -98,6 +98,7 @@ def chunk_task_seq(task_seq):
         task_routes[route_ptr][1:length + 1] = task_seq[from_idx:to_idx + 1]
         task_routes[route_ptr, 0] = length
     task_routes[0, 0] = len(seg_start) - 1
+    return task_routes
 
 
 class MAENS:
@@ -669,18 +670,7 @@ class MAENS:
                 ind.loads = del_element(ind.loads, next_move.orig_seg)
         else:
             # M-S operator (merge and split)
-            task_routes[0, 0] = 1
-            task_routes[1, 0] = 1
-            task_routes[1, 1] = 0
-            for i in range(2, ind.task_seq[0] + 1):
-                task_routes[task_routes[0, 0], 0] += 1
-                task_routes[task_routes[0, 0], task_routes[task_routes[0, 0], 0]] = ind.task_seq[i]
-
-                if ind.task_seq[i] == 0 and i < ind.task_seq[0]:
-                    task_routes[0, 0] += 1
-                    task_routes[task_routes[0, 0], 0] = 1
-                    task_routes[task_routes[0, 0], 1] = 0
-
+            task_routes = chunk_task_seq(ind.task_seq)
             if task_routes[0, 0] < nsize:
                 return
 
@@ -762,7 +752,7 @@ class MAENS:
         ind.task_seq[i] == 0: 一条route的终点（下一条route起点）
                         != 0: route上的task在inst_task中的编号
         """
-        chunk_task_seq(ind.task_seq)
+        task_routes = chunk_task_seq(ind.task_seq)
 
         best_move = Move(type=1)
         tmp_move = Move(type=1)
@@ -874,7 +864,7 @@ class MAENS:
         inst_tasks = self.tasks
         min_dist = self.min_dist
         capacity = self.capacity
-        chunk_task_seq(ind.task_seq)
+        task_routes = chunk_task_seq(ind.task_seq)
 
         best_move = Move(type=2)
         tmp_move = Move(type=2)
@@ -980,7 +970,7 @@ class MAENS:
         min_dist = self.min_dist
         capacity = self.capacity
 
-        chunk_task_seq(ind.task_seq)
+        task_routes = chunk_task_seq(ind.task_seq)
 
         best_move = Move(type=3)
         tmp_move = Move(type=3)
@@ -1065,8 +1055,7 @@ class MAENS:
         self.psize = len(population)
         self.opsize = 6 * self.psize
         self.total_size = self.psize + self.opsize
-        self.population = [None] * (self.total_size)
-        self.population[:self.psize] = population
+        self.population = population
         return best_fsb_solution
 
     def random_select(self):
@@ -1080,8 +1069,7 @@ class MAENS:
 
     def stochastic_rank(self):
         pf = 0.45
-        total_size = self.total_size
-        for i in range(total_size):
+        for i in range(self.total_size):
             for j in range(i):
                 r = random.random()
                 if (self.population[j].exceed_load == 0 and self.population[j + 1].exceed_load == 0) \
@@ -1090,6 +1078,7 @@ class MAENS:
                         self.population[j], self.population[j + 1] = self.population[j + 1], self.population[j]
                 elif self.population[j].exceed_load > self.population[j + 1].exceed_load:
                     self.population[j], self.population[j + 1] = self.population[j + 1], self.population[j]
+        self.population = self.population[:self.psize]
 
 
     def maens(self):
@@ -1134,9 +1123,8 @@ class MAENS:
             print('MAENS: ', counter, ' ', self.best_fsb_solution.quality)
 
 
-    def solve(self, ptr):
-        ptr = ptr % self.total_size
-        if ptr == 0:
+    def solve(self):
+        if len(self.population) == self.total_size:
             self.stochastic_rank()
 
         child = Solution(None, None, -1, -1)
@@ -1147,14 +1135,14 @@ class MAENS:
         if sx.exceed_load == 0 and sx.quality < self.best_fsb_solution.quality:
             self.best_fsb_solution = sx
         # add sx into population if not exsist
-        if sx not in self.population[:ptr]:
+        if sx not in self.population:
             child = sx
         # local search with probability
         r = random.random()
         if r < self.pls:
             # do local search
             sls, self.best_fsb_solution = self.lns_mut(sx, self.best_fsb_solution)
-            if sls not in self.population[:ptr]:
+            if sls not in self.population:
                 child = sls
         if child.quality > 0 and child != s1 and child != s2:
-            self.population[ptr] = child
+            self.population.append(child)
