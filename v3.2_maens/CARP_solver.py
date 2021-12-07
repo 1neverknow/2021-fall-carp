@@ -71,7 +71,7 @@ if __name__ == '__main__':
     import sys
 
     if len(sys.argv) == 1:
-        sys.argv = ['CARP_solver.py', '../CARP_samples/egl-s1-A.dat', '-t', '300', '-s', '1']
+        sys.argv = ['CARP_solver.py', '../CARP_samples/egl-s1-A.dat', '-t', '300', '-s', '23290']
 
     filename, termination, seed = [sys.argv[i] for i in range(len(sys.argv)) if i % 2 == 1]
     termination = int(termination)

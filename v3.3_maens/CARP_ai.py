@@ -112,10 +112,10 @@ class MAENS:
         self.min_dist = info.min_dist
 
         # 种群大小
-        self.psize = 30
+        self.psize = 20
         self.population = []
         # 初始化寻找种群的最大迭代数
-        self.ubtrial = 50
+        self.ubtrial = 30
         # 每次迭代生成的后代数量
         self.opsize = 6 * self.psize
         # 每回合生成的解的总数
@@ -535,7 +535,7 @@ class MAENS:
             sequence = join_routes(sequence, routes1[i])
 
         loads = xclds
-        for i in range(xclds[0], 0, -1):
+        for i in range(loads[0], 0, -1):
             if loads[i] == 0:
                 loads = del_element(loads, i)
         quality = self.get_task_seq_cost(sequence, inst_tasks)
@@ -549,44 +549,38 @@ class MAENS:
                 self.best_fsb_solution.quality / sx.quality + sx.exceed_load / self.capacity + 1.0)
         sls.calculate_fitness(coef)
 
-        count, count1 = 0, 0
+        count = 0
         count_fsb, count_infsb = 0, 0
 
-        best = Solution(None, None, -1, -1)
-        best.fitness = np.inf
-        for move in self.operations:
-            imp = True
-            while imp:
-                count += 1
-                imp = False
+        imp = True  # improved
+        while imp:
+            count += 1
+            imp = False
 
-                if sls.exceed_load == 0:
-                    count_fsb += 1
-                else:
-                    count_infsb += 1
+            if sls.exceed_load == 0:
+                count_fsb += 1
+            else:
+                count_infsb += 1
 
-                if count % 5 == 0:
-                    # 系数随着迭代次数和可行解数量改变
-                    if count_fsb == 5:
-                        coef /= 5
-                        sls.calculate_fitness(coef)
-                    elif count_infsb == 5:
-                        coef *= 5
-                        sls.calculate_fitness(coef)
-                    count_fsb = 0
-                    count_infsb = 0
+            if count % 5 == 0:
+                # 系数随着迭代次数和可行解数量改变
+                if count_fsb == 5:
+                    coef /= 5
+                    sls.calculate_fitness(coef)
+                elif count_infsb == 5:
+                    coef *= 5
+                    sls.calculate_fitness(coef)
+                count_fsb = 0
+                count_infsb = 0
 
-                # local search operator
-                prev = copy.deepcopy(sls)
-                sls = self.tradition_lns(sls, coef, move)
-                if sls.fitness < prev.fitness:
-                    imp = True
-                else:
-                    sls = prev
-            if sls.fitness < best.fitness:
-                best = copy.deepcopy(sls)
+            # local search operator
+            prev = copy.deepcopy(sls)
+            sls = self.tradition_lns(sls, coef)
+            if sls.fitness < prev.fitness:
+                imp = True
+            else:
+                sls = prev
 
-        sls = best
         if sls.exceed_load == 0 and sls.quality < self.best_fsb_solution.quality:
             self.best_fsb_solution = copy.deepcopy(sls)
 
@@ -596,40 +590,36 @@ class MAENS:
         if sls.fitness > prev.fitness:
             return prev
 
-        # if M-S is improved, do deeper local search
-        for move in self.operations:
-            imp = True
-            while imp:
-                count += 1
-                imp = False
+        # if M-S is improved, deeper local search
+        imp = True
+        while imp:
+            count += 1
+            imp = False
 
-                if sls.exceed_load == 0:
-                    count_fsb += 1
-                else:
-                    count_infsb += 1
+            if sls.exceed_load == 0:
+                count_fsb += 1
+            else:
+                count_infsb += 1
 
-                if count % 5 == 0:
-                    # 系数随着迭代次数和可行解数量改变
-                    if count_fsb == 5:
-                        coef /= 5
-                        sls.calculate_fitness(coef)
-                    elif count_infsb == 5:
-                        coef *= 5
-                        sls.calculate_fitness(coef)
-                    count_fsb = 0
-                    count_infsb = 0
+            if count % 5 == 0:
+                # 系数随着迭代次数和可行解数量改变
+                if count_fsb == 5:
+                    coef /= 5
+                    sls.calculate_fitness(coef)
+                elif count_infsb == 5:
+                    coef *= 5
+                    sls.calculate_fitness(coef)
+                count_fsb = 0
+                count_infsb = 0
 
-                # local search operator
-                prev = copy.deepcopy(sls)
-                sls = self.tradition_lns(sls, coef, move)
-                if sls.fitness < prev.fitness:
-                    imp = True
-                else:
-                    sls = prev
-            if sls.fitness < best.fitness:
-                best = copy.deepcopy(sls)
+            # local search operator
+            prev = copy.deepcopy(sls)
+            sls = self.tradition_lns(sls, coef)
+            if sls.fitness < prev.fitness:
+                imp = True
+            else:
+                sls = prev
 
-        sls = best
         if sls.exceed_load == 0 and sls.quality < self.best_fsb_solution.quality:
             self.best_fsb_solution = copy.deepcopy(sls)
 
@@ -638,12 +628,12 @@ class MAENS:
     def get_fitness(self, move: Move):
         return move.fitness
 
-    def tradition_lns(self, ind: Solution, coef, move):
+    def tradition_lns(self, ind: Solution, coef):
         inst_tasks = self.tasks
         ind.calculate_fitness(coef)
 
         # traditional move
-        next_move: Move = move(ind, coef)
+        next_move: Move = min([move(ind, coef) for move in self.operations], key=self.get_fitness)
         # 将task_route转化为ind.task_seq
         seg_starts = np.ones(ind.loads[0] + 2, dtype=int)
         seg_starts[1:ind.loads[0] + 1] = np.where(ind.task_seq[1:ind.task_seq[0]] == 0)[0] + 1
@@ -764,6 +754,42 @@ class MAENS:
             ind = copy.deepcopy(next_indi)
 
         return ind
+        # # 计算可能产生的解(extended neighbor)的数量
+        # routes_index = np.arange(1, task_routes[0, 0] + 1, 1, dtype=int)
+        # combs = combinations(routes_index, 2)
+        # cnt = 0
+        # for lns_routes in combs:
+        #     if cnt == MAX_ENSSIZE:
+        #         break
+        #     cnt += 1
+        #     sel_total_load = lns_routes[0] + lns_routes[1]
+        #     if sel_total_load > 2 * self.capacity:
+        #         continue
+        #
+        #     serve_mark = np.zeros(MAX_TASK_TAG_LENGTH, dtype=int)
+        #     for j in range(2):
+        #         routeID = lns_routes[j]
+        #         for k in range(2, task_routes[routeID, 0]):
+        #             serve_mark[task_routes[routeID, k]] = 1
+        #             serve_mark[inst_tasks[task_routes[routeID, k]].inverse] = 1
+        #
+        #     tmp_indi = self.path_scanning(serve_mark)
+        #
+        #     for j in range(1, task_routes[0, 0] + 1):
+        #         if j in lns_routes:
+        #             continue
+        #         tmp_indi.task_seq[0] -= 1
+        #         tmp_indi.task_seq = join_routes(tmp_indi.task_seq, task_routes[j])
+        #         tmp_indi.loads[0] += 1
+        #         tmp_indi.loads[tmp_indi.loads[0]] = ind.loads[j]
+        #         tmp_indi.exceed_load += max(ind.loads[j] - self.capacity, 0)
+        #
+        #     tmp_indi.quality = self.get_task_seq_cost(tmp_indi.task_seq, inst_tasks)
+        #     tmp_indi.calculate_fitness(coef)
+        #     if tmp_indi.fitness < ind.fitness:
+        #         ind = copy.deepcopy(tmp_indi)
+        #
+        # return ind
 
     def single_insertion(self, ind: Solution, coef):
         """

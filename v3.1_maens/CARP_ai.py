@@ -49,7 +49,7 @@ def add_element(arr, e, k):
     if k < 1 or k > arr[0] + 1:
         print('insert position error')
         return
-    arr[k + 1:arr[0]+2] = arr[k:arr[0]+1]
+    arr[k + 1:arr[0] + 2] = arr[k:arr[0] + 1]
     arr[k] = e
     arr[0] += 1
     return arr
@@ -61,6 +61,7 @@ def assign_subroute(src, k1, k2, dst):
     dst[0] = length
     dst[1:length + 1] = src[k1:k2 + 1]
     return dst
+
 
 def join_routes(joint_arr, arr):
     length = arr[0]
@@ -102,7 +103,7 @@ def chunk_task_seq(task_seq):
 
 
 class MAENS:
-    def __init__(self, info):
+    def __init__(self, info, psize=20, ubtrial=50):
         # 任务信息初始化
         self.tasks = info.tasks
         self.req_edge_num = info.edges_required
@@ -112,10 +113,10 @@ class MAENS:
         self.min_dist = info.min_dist
 
         # 种群大小
-        self.psize = 20
+        self.psize = psize
         self.population = []
         # 初始化寻找种群的最大迭代数
-        self.ubtrial = 30
+        self.ubtrial = ubtrial
         # 每次迭代生成的后代数量
         self.opsize = 6 * self.psize
         # 每回合生成的解的总数
@@ -125,7 +126,7 @@ class MAENS:
         # Number of routes involved in Merge-Split operator
         self.p = 2
 
-        self.operations = [self.single_insertion, self.double_insertion, self.swap]
+        self.operations = [self.single_insertion, self.swap]
 
         from_head_to_depot = lambda x: self.min_dist[x, self.depot]
         self.rules = [
@@ -185,7 +186,7 @@ class MAENS:
             mindist = np.inf
             nearest_task[0] = 0
 
-            # 贪心查找最近的任务
+            # 随机获得下一个任务
             for i in range(1, candi_tasks[0] + 1):
                 curr_candi_task = candi_tasks[i]
                 curr_cost = min_dist[inst_tasks[curr_task].v, inst_tasks[curr_candi_task].u]
@@ -218,11 +219,10 @@ class MAENS:
         exceed_loads = self.get_exceed_loads(loads)
         return Solution(sequence, loads, total_cost, exceed_loads)
 
-
     def path_scanning(self, serve_mark):
         inst_tasks = self.tasks
         min_dist = self.min_dist
-        serve_task_num = np.sum(serve_mark[self.req_edge_num+1:self.task_num + 1])
+        serve_task_num = np.sum(serve_mark[self.req_edge_num + 1:self.task_num + 1])
 
         unserved_task = np.empty(MAX_TASK_TAG_LENGTH, dtype=int)
         candidate_task = np.empty(MAX_TASK_TAG_LENGTH, dtype=int)
@@ -417,7 +417,7 @@ class MAENS:
             pare_to_set_size = 0
             curr_task = 0
             for j in range(1, routes1[0, 0]):
-                if routes1[j, 0] == 2:    # 空路径
+                if routes1[j, 0] == 2:  # 空路径
                     continue
                 curr_task = left_tasks[n]
                 if xclds[j] > capacity:
@@ -437,7 +437,8 @@ class MAENS:
                     # k: 被插入的route中对应的position
                     # cost: 插入之后增加的cost
                     # ivload: 插入之后增加的load
-                    candidate_insertions[candidate_insert_cnt] = Insert(task=curr_task, routeID=j, position=k, cost=insert_cost, exceed_load=ivload)
+                    candidate_insertions[candidate_insert_cnt] = Insert(task=curr_task, routeID=j, position=k,
+                                                                        cost=insert_cost, exceed_load=ivload)
 
                     out[0] = 0
                     add = True
@@ -453,7 +454,8 @@ class MAENS:
                             out[out[0]] = m
                     if add:
                         for m in range(out[0], 0, -1):
-                            pare_to_set_insertions[out[m]:pare_to_set_size] = pare_to_set_insertions[out[m] + 1:pare_to_set_size + 1]
+                            pare_to_set_insertions[out[m]:pare_to_set_size] = pare_to_set_insertions[
+                                                                              out[m] + 1:pare_to_set_size + 1]
                             pare_to_set_size -= 1
                         pare_to_set_size += 1
                         pare_to_set_insertions[pare_to_set_size] = candidate_insertions[candidate_insert_cnt]
@@ -463,7 +465,8 @@ class MAENS:
                     insert_cost = min_dist[inst_tasks[routes1[j, k - 1]].v, inst_tasks[w].u] \
                                   + min_dist[inst_tasks[w].v, inst_tasks[routes1[j, k]].u] \
                                   - min_dist[inst_tasks[routes1[j, k - 1]].v, inst_tasks[routes1[j, k]].u]
-                    candidate_insertions[candidate_insert_cnt] = Insert(task=w, routeID=j, position=k, cost=insert_cost, exceed_load=ivload)
+                    candidate_insertions[candidate_insert_cnt] = Insert(task=w, routeID=j, position=k, cost=insert_cost,
+                                                                        exceed_load=ivload)
 
                     out[0] = 0
                     add = True
@@ -479,7 +482,8 @@ class MAENS:
                             out[out[0]] = m
                     if add:
                         for m in range(out[0], 0, -1):
-                            pare_to_set_insertions[out[m]:pare_to_set_size] = pare_to_set_insertions[out[m] + 1:pare_to_set_size + 1]
+                            pare_to_set_insertions[out[m]:pare_to_set_size] = pare_to_set_insertions[
+                                                                              out[m] + 1:pare_to_set_size + 1]
                             pare_to_set_size -= 1
                         pare_to_set_size += 1
                         pare_to_set_insertions[pare_to_set_size] = candidate_insertions[candidate_insert_cnt]
@@ -488,12 +492,13 @@ class MAENS:
             candidate_insert_cnt += 1
             insert_cost = min_dist[self.depot, inst_tasks[curr_task].u] \
                           + min_dist[inst_tasks[curr_task].v, self.depot]
-            candidate_insertions[candidate_insert_cnt] = Insert(task=curr_task, routeID=0, position=2, cost=insert_cost, exceed_load=0)
+            candidate_insertions[candidate_insert_cnt] = Insert(task=curr_task, routeID=0, position=2, cost=insert_cost,
+                                                                exceed_load=0)
 
             out[0] = 0
             add = True
             for m in range(1, pare_to_set_size + 1):
-                cand_insert : Insert = candidate_insertions[candidate_insert_cnt]
+                cand_insert: Insert = candidate_insertions[candidate_insert_cnt]
                 if cand_insert.cost > pare_to_set_insertions[m].cost and \
                         cand_insert.exceed_load > pare_to_set_insertions[m].exceed_load:
                     add = False
@@ -504,7 +509,8 @@ class MAENS:
                     out[out[0]] = m
             if add:
                 for m in range(out[0], 0, -1):
-                    pare_to_set_insertions[out[m]:pare_to_set_size] = pare_to_set_insertions[out[m] + 1:pare_to_set_size + 1]
+                    pare_to_set_insertions[out[m]:pare_to_set_size] = pare_to_set_insertions[
+                                                                      out[m] + 1:pare_to_set_size + 1]
                     pare_to_set_size -= 1
                 pare_to_set_size += 1
                 pare_to_set_insertions[pare_to_set_size] = candidate_insertions[candidate_insert_cnt]
@@ -522,7 +528,8 @@ class MAENS:
                 xclds[0] += 1
                 xclds[xclds[0]] = inst_tasks[best_insertion.task].demand
             else:
-                routes1[best_insertion.routeID] = add_element(routes1[best_insertion.routeID], best_insertion.task, best_insertion.position)
+                routes1[best_insertion.routeID] = add_element(routes1[best_insertion.routeID], best_insertion.task,
+                                                              best_insertion.position)
                 xclds[best_insertion.routeID] += inst_tasks[best_insertion.task].demand
 
         # transfer routes1 to sequence
@@ -542,11 +549,10 @@ class MAENS:
         exceed_load = self.get_exceed_loads(loads)
         return Solution(sequence, loads, quality, exceed_load)
 
-
-    def lns_mut(self, sx: Solution):
+    def lns_mut(self, sx: Solution, best_fsb_solution: Solution):
         sls = copy.deepcopy(sx)
-        coef = self.best_fsb_solution.quality / self.capacity * (
-                self.best_fsb_solution.quality / sx.quality + sx.exceed_load / self.capacity + 1.0)
+        coef = best_fsb_solution.quality / self.capacity * (
+                best_fsb_solution.quality / sx.quality + sx.exceed_load / self.capacity + 1.0)
         sls.calculate_fitness(coef)
 
         count, count1 = 0, 0
@@ -585,9 +591,9 @@ class MAENS:
                     imp = True
                 if count1 > 50 and sls.quality < prev_quality:
                     break
-                if sls.exceed_load == 0 and sls.quality < self.best_fsb_solution.quality:
-                    self.best_fsb_solution = copy.deepcopy(sls)
-        return sls
+                if sls.exceed_load == 0 and sls.quality < best_fsb_solution.quality:
+                    best_fsb_solution = copy.deepcopy(sls)
+        return sls, best_fsb_solution
 
     def get_fitness(self, move: Move):
         return move.fitness
@@ -601,7 +607,7 @@ class MAENS:
             next_move: Move = min([move(ind, coef) for move in self.operations], key=self.get_fitness)
             # 将task_route转化为ind.task_seq
             seg_starts = np.ones(ind.loads[0] + 2, dtype=int)
-            seg_starts[1:1+ind.loads[0]] = np.where(ind.task_seq[1:ind.task_seq[0]] == 0)[0] + 1
+            seg_starts[1:1 + ind.loads[0]] = np.where(ind.task_seq[1:ind.task_seq[0]] == 0)[0] + 1
             orig_ptr = seg_starts[next_move.orig_seg] + next_move.orig_pos - 1
             targ_ptr = seg_starts[next_move.targ_seg] + next_move.targ_pos - 1
 
@@ -639,7 +645,8 @@ class MAENS:
                 else:
                     ind.task_seq = add_element(ind.task_seq, next_move.task2, targ_ptr)
                     ind.task_seq = add_element(ind.task_seq, next_move.task1, targ_ptr)
-                    ind.loads[next_move.targ_seg] += inst_tasks[next_move.task1].demand + inst_tasks[next_move.task2].demand
+                    ind.loads[next_move.targ_seg] += inst_tasks[next_move.task1].demand + inst_tasks[
+                        next_move.task2].demand
             elif next_move.type == 3:
                 ind.task_seq[targ_ptr] = next_move.task1
                 ind.task_seq[orig_ptr] = next_move.task2
@@ -668,6 +675,8 @@ class MAENS:
             cnt = 0
             for tup in combs:
                 cnt += 1
+                if cnt >= MAX_ENSSIZE:
+                    break
                 candidate_combs[cnt, 0] = nsize
                 for j in range(nsize):
                     candidate_combs[cnt, j + 1] = tup[j]
@@ -1022,12 +1031,16 @@ class MAENS:
                         for task1 in cand_task1:
                             for task2 in cand_task2:
                                 quality = ind.quality \
-                                          - min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
-                                          - min_dist[inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
+                                          - min_dist[
+                                              inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task_routes[s1, i]].u] \
+                                          - min_dist[
+                                              inst_tasks[task_routes[s1, i]].v, inst_tasks[task_routes[s1, i + 1]].u] \
                                           + min_dist[inst_tasks[task_routes[s1, i - 1]].v, inst_tasks[task2].u] \
                                           + min_dist[inst_tasks[task2].v, inst_tasks[task_routes[s1, i + 1]].u] \
-                                          - min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u] \
-                                          - min_dist[inst_tasks[task_routes[s2, j]].v, inst_tasks[task_routes[s2, j + 1]].u] \
+                                          - min_dist[
+                                              inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task_routes[s2, j]].u] \
+                                          - min_dist[
+                                              inst_tasks[task_routes[s2, j]].v, inst_tasks[task_routes[s2, j + 1]].u] \
                                           + min_dist[inst_tasks[task_routes[s2, j - 1]].v, inst_tasks[task1].u] \
                                           + min_dist[inst_tasks[task1].v, inst_tasks[task_routes[s2, j + 1]].u]
                                 tmp_move.quality = quality
@@ -1094,7 +1107,46 @@ class MAENS:
                     self.population[j], self.population[j + 1] = self.population[j + 1], self.population[j]
         self.population = self.population[:self.psize]
 
+    def maens(self):
+        total_size = self.total_size
+        counter = 0
+        wite = 0
+        old_best = Solution(None, None, np.inf, 0)
+        while counter < 5:
+            counter += 1
+            wite += 1
+            ptr = self.psize
+            child = Solution(None, None, -1, -1)
+            while ptr < total_size:
+                # randomly select two parents
+                s1, s2 = self.random_select()
+                # crossover
+                sx = self.SBX(s1, s2)
+                if sx.exceed_load == 0 and sx.quality < self.best_fsb_solution.quality:
+                    self.best_fsb_solution = sx
+                    wite = 0
 
+                # add sx into population if not exsist
+                if sx not in self.population[:ptr]:
+                    child = sx
+
+                # local search with probability
+                r = random.random()
+                if r < self.pls:
+                    # do local search
+                    sls, self.best_fsb_solution = self.lns_mut(sx, self.best_fsb_solution)
+                    if sls not in self.population[:ptr]:
+                        child = sls
+
+                if child.quality > 0 and child != s1 and child != s2:
+                    self.population[ptr] = child
+                    ptr += 1
+            # stochastic ranking
+            self.stochastic_rank()
+
+            if self.best_fsb_solution.quality < old_best.quality:
+                old_best = self.best_fsb_solution
+            print('MAENS: ', counter, ' ', self.best_fsb_solution.quality)
 
     def solve(self):
         if len(self.population) == self.total_size:
@@ -1114,7 +1166,7 @@ class MAENS:
         r = random.random()
         if r < self.pls:
             # do local search
-            sls = self.lns_mut(sx)
+            sls, self.best_fsb_solution = self.lns_mut(sx, self.best_fsb_solution)
             if sls not in self.population:
                 child = sls
         if child.quality > 0 and child != s1 and child != s2:

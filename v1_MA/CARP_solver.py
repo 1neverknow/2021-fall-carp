@@ -1,37 +1,34 @@
 import os
 import random
 import time
-import numpy as np
 
-from CARP_info import Info
+from CARP_info import *
 from CARP_ai import MAENS
+
+
+# from CARP_algorithm import CARPAlgorithm as MAEN
 
 class CarpEngine:
     def __init__(self, filename, termination, seed, test=False):
         self.info = Info(filename)
         self.termination = termination
-        self.seed = seed
         self.test = test
+
         random.seed(seed)
         np.random.seed(seed)
 
     def output(self, solution):
         def format_solution(s):
             s_print = []
-            s_print.append(0)
             for p in s:
-                if p == 0:
-                    s_print.append(0)
-                    s_print.append(0)
-                    continue
-                t = self.info.tasks[p]
-                s_print.append((t.u, t.v))
-            s_print.append(0)
+                s_print.append(0)
+                s_print.extend(p)
+                s_print.append(0)
             return s_print
 
-        routes = solution.task_seq[2:solution.task_seq[0]]
+        routes = solution.routes
         print("s", (",".join(str(d) for d in format_solution(routes))).replace(" ", ""))
-        print("q", int(solution.quality))
+        print("q", int(solution.total_cost))
 
     def solve(self):
         avg_time = 0
@@ -43,9 +40,10 @@ class CarpEngine:
         remain_time -= (time.perf_counter() - start_time)
 
         iter_count = 0
+        best = None
         while remain_time > 2 * avg_time:
             iter_start = time.perf_counter()
-            solver.solve()
+            best = solver.run()
             iter_end = time.perf_counter()
             iter_duration = iter_end - iter_start
             iter_count += 1
@@ -62,21 +60,21 @@ class CarpEngine:
                         iter_duration,
                         avg_time,
                         remain_time,
-                        solver.best_fsb_solution.quality)
+                        best.total_cost)
                 )
-        self.output(solver.best_fsb_solution)
+        self.output(best)
+        return int(best.total_cost)
 
 
 if __name__ == '__main__':
     import sys
 
     if len(sys.argv) == 1:
-        sys.argv = ['CARP_solver.py', '../CARP_samples/egl-s1-A.dat', '-t', '300', '-s', '1']
+        sys.argv = ['CARP_solver.py', '../CARP_samples/r/egl-s2-A.dat', '-t', '300', '-s', '1']
 
     filename, termination, seed = [sys.argv[i] for i in range(len(sys.argv)) if i % 2 == 1]
     termination = int(termination)
     seed = int(seed) % 4294967296
-
 
     engine = CarpEngine(filename, termination, seed, test=True)
     engine.solve()

@@ -39,10 +39,7 @@ class CarpEngine:
         remain_time = self.termination - 2
         start_time = time.perf_counter()
 
-        if self.termination > 300:
-            solver = MAENS(self.info, 30, 50)
-        else:
-            solver = MAENS(self.info)
+        solver = MAENS(self.info)
         remain_time -= (time.perf_counter() - start_time)
 
         iter_count = 0
@@ -74,7 +71,7 @@ if __name__ == '__main__':
     import sys
 
     if len(sys.argv) == 1:
-        sys.argv = ['CARP_solver.py', '../CARP_samples/r/egl-e2-B.dat', '-t', '120', '-s', '1']
+        sys.argv = ['CARP_solver.py', '../CARP_samples/egl-s2-A.dat', '-t', '300', '-s', '23290']
 
     filename, termination, seed = [sys.argv[i] for i in range(len(sys.argv)) if i % 2 == 1]
     termination = int(termination)
